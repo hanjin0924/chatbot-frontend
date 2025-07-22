@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { azure } from "@ai-sdk/azure";
 import { frontendTools } from "@assistant-ui/react-ai-sdk";
 import { streamText } from "ai";
 
@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   const { messages, system, tools } = await req.json();
 
   const result = streamText({
-    model: openai("gpt-4o"),
+    model: azure("gpt-4.1"),
     messages,
     // forward system prompt and tools from the frontend
     toolCallStreaming: true,
