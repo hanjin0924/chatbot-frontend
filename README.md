@@ -7,6 +7,11 @@ First, add your OpenAI API key to `.env.local` file:
 ```
 AZURE_RESOURCE_NAME=""      # Azure OpenAI Resource Name
 AZURE_API_KEY=""            # Azure OpenAI API Key
+AZURE_MODEL_NAME=""         # Azure OpenAI Model Name
+
+AZURE_SEARCH_ENDPOINT=""    # Azure AI Search Endpoint
+AZURE_SEARCH_KEY=""         # Azure AI Search API Key
+AZURE_SEARCH_INDEX_NAME=""  # Azure AI Search Index Name
 ```
 
 Then, run the development server:
