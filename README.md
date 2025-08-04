@@ -12,6 +12,7 @@ AZURE_MODEL_NAME=""         # Azure OpenAI Model Name
 AZURE_SEARCH_ENDPOINT=""    # Azure AI Search Endpoint
 AZURE_SEARCH_KEY=""         # Azure AI Search API Key
 AZURE_SEARCH_INDEX_NAME=""  # Azure AI Search Index Name
+AZURE_SEARCH_SEMANTIC_CONFIG_NAME=""
 ```
 
 Then, run the development server:

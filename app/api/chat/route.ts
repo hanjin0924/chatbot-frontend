@@ -1,4 +1,3 @@
-import { SearchClient, AzureKeyCredential } from "@azure/search-documents";
 import { azure } from "@ai-sdk/azure";
 import { frontendTools } from "@assistant-ui/react-ai-sdk";
 import { streamText, type CoreMessage } from "ai";
@@ -6,88 +5,113 @@ import { streamText, type CoreMessage } from "ai";
 export const runtime = "edge";
 export const maxDuration = 30;
 
-const modelName = process.env.AZURE_MODEL_NAME;
-
-// Azure AI Search 클라이언트 초기화
-const searchClient = new SearchClient(
-  process.env.AZURE_SEARCH_ENDPOINT!,
-  process.env.AZURE_SEARCH_INDEX_NAME!,
-  new AzureKeyCredential(process.env.AZURE_SEARCH_KEY!)
-);
+const modelName      = process.env.AZURE_MODEL_NAME!;
+const searchEndpoint = process.env.AZURE_SEARCH_ENDPOINT!;
+const indexName      = process.env.AZURE_SEARCH_INDEX_NAME!;
+const apiKey         = process.env.AZURE_SEARCH_KEY!;
+const semanticConfig = process.env.AZURE_SEARCH_SEMANTIC_CONFIG_NAME?.trim() || "default";
 
 export async function POST(req: Request) {
   const { messages, system, tools } = await req.json();
 
-  // 마지막 메시지에서 '문자열' 검색어 추출
-  const lastMessage = messages[messages.length - 1];
-  let searchQuery = "";
-
-  // lastMessage가 존재하고, content 속성이 있는지 확인
-  if (lastMessage && lastMessage.content) {
-    // content가 단순 문자열인 경우, 그대로 사용
-    if (typeof lastMessage.content === 'string') {
-      searchQuery = lastMessage.content;
-    } 
-    // content가 복잡한 배열 형태일 경우 (Vercel AI SDK 표준)
-    else if (Array.isArray(lastMessage.content)) {
-      // 배열에서 type이 'text'인 부분의 내용만 추출하여 합치기
-      searchQuery = lastMessage.content
-        .filter(part => part.type === 'text')
-        .map(part => part.text)
-        .join(' ');
-    }
+  // 1) 마지막 메시지에서 검색어 추출
+  const last = messages[messages.length - 1];
+  let query = "";
+  if (last.content) {
+    query = typeof last.content === "string"
+      ? last.content
+      : last.content.filter(p => p.type === "text").map(p => p.text).join(" ");
   }
 
   let ragContent = "";
-  // 검색어가 있는 경우에만 Azure AI Search를 실행
-  if (searchQuery) {
+  if (query) {
     try {
-      const searchResults = await searchClient.search(searchQuery, {
-        select: ["content"],
-        top: 3,
-      });
+      // 2) Semantic+Vector 검색 (REST)
+      const url = `${searchEndpoint}/indexes/${encodeURIComponent(indexName)}/docs/search?api-version=2023-10-01-Preview`;
+      const restBody = {
+        search:                query,
+        queryType:             "semantic",
+        queryLanguage:         "en-us",
+        semanticConfiguration: semanticConfig,
+        captions:              "extractive",
+        answers:               "extractive|count-3",
+        vectorQueries: [
+          {
+            kind: "text",
+            fields: "chunkVector",  // ← 배열이 아닌 문자열
+            text: query,
+            k: 5                    // ← kNearestNeighborsCount → k
+          }
+        ]
+      };
 
-      const documents = [];
-      for await (const result of searchResults.results) {
-      // 내용이 있는 경우에만 추가
-        if (result.document.content) { 
-          documents.push(result.document.content);
+      const res  = await fetch(url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "api-key": apiKey },
+        body:    JSON.stringify(restBody)
+      });
+      const raw = await res.text();
+      if (!res.ok) {
+        console.error("🔍 Search REST error body:", raw);
+        throw new Error(`Search failed: ${res.status}`);
+      }
+      const json = JSON.parse(raw);
+      console.log(json)
+
+      // 3) @search.answers 우선 사용
+      const answers: { text: string }[] = json["@search.answers"] ?? [];
+      if (answers.length) {
+        ragContent = answers.map(a => a.text).join("\n\n---\n\n");
+      } else {
+        // 4) 없으면 JS SDK로 벡터 검색 폴백
+        const { SearchClient, AzureKeyCredential, SearchOptions } = await import("@azure/search-documents");
+        const searchClient = new SearchClient(searchEndpoint, indexName, new AzureKeyCredential(apiKey));
+        const vectorOpts: SearchOptions = {
+          select: ["content"],
+          top:    5,
+          vectorSearchOptions: {
+            queries: [{
+              kind: "text",
+              fields: ["chunkVector"],
+              text:   query,
+              kNearestNeighborsCount: 5
+            }]
+          }
+        };
+
+        const docs: string[] = [];
+        for await (const r of searchClient.search(query, vectorOpts).results) {
+          if (r.document.content) docs.push(r.document.content);
         }
+        ragContent = docs.join("\n\n---\n\n");
       }
-      
-      if (documents.length > 0) {
-        ragContent = documents.join("\n\n---\n\n");
-      }
-    } catch (e) {
-        console.error("Azure AI Search Error:", e);
+    } catch (err) {
+      console.error("Azure AI Search Error:", err);
     }
   }
 
-  // 검색된 내용으로 시스템 프롬프트 보강
+  // 5) RAG용 시스템 프롬프트 보강
   const augmentedSystemPrompt = `
     당신은 사용자에게 도움이 되는 답변을 제공하는 AI 어시스턴트입니다.
-    아래에 제공된 '참고 정보'를 바탕으로 사용자의 질문에 답변해 주세요.
-    만약 '참고 정보'에서 질문에 대한 답변을 찾을 수 없다면, 정보가 부족하여 답변할 수 없다고 솔직하게 말해야 합니다.
+    아래 '참고 정보'를 바탕으로 질문에 답변해 주세요.
+    정보가 부족하면 솔직하게 말씀해 주세요.
 
     [참고 정보]
     ---
     ${ragContent}
     ---
-    
-    [사용자가 요청한 기존 시스템 프롬프트]
-    ${system ?? "특별한 요청 없음"}
+
+    [원래 시스템 프롬프트]
+    ${system ?? "없음"}
   `.trim();
 
-  const result = streamText({
-    model: azure(modelName),
+  // 6) AOAI 스트리밍 응답
+  return streamText({
+    model:             azure(modelName),
     messages,
     toolCallStreaming: true,
-    system: augmentedSystemPrompt,
-    tools: {
-      ...frontendTools(tools),
-    },
-    onError: console.log,
-  });
-
-  return result.toDataStreamResponse();
+    system:            augmentedSystemPrompt,
+    tools:             { ...frontendTools(tools) },
+    onError:           console.error,
+  }).toDataStreamResponse();
 }
