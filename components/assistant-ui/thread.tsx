@@ -1,3 +1,5 @@
+'use client'
+
 import {
   ActionBarPrimitive,
   BranchPickerPrimitive,
@@ -22,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { ToolFallback } from "./tool-fallback";
+import AnimatedGreeting from "../AnimatedGreeting";
 
 export const Thread: FC = () => {
   return (
@@ -74,7 +77,8 @@ const ThreadWelcome: FC = () => {
     <ThreadPrimitive.Empty>
       <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
-          <p className="mt-4 font-medium text-2xl">CCCR님, 안녕하세요.</p>
+          {/*<p className="mt-4 font-medium text-2xl">CCCR님, 안녕하세요.</p>*/}
+          <AnimatedGreeting text="CCCR님, 안녕하세요." />
         </div>
         <ThreadWelcomeSuggestions />
       </div>
