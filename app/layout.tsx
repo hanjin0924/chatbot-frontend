@@ -29,10 +29,11 @@ export default function RootLayout({
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased h-full relative bg-transparent`}
       >
+        <div className="relative z-10 min-h-svh">
         {/*children
         <div className="flex">
           <AppSidebar />
@@ -47,7 +48,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
         </SidebarProvider>
         */}
-        {children}
+          {children}
+        </div>
       </body>
     </html>
   );

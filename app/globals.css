@@ -112,6 +112,21 @@
   --sidebar-ring: oklch(0.552 0.016 285.938);
 }
 
+/* === Global background image === */
+:root, html, body { height: 100%; }
+body { background: transparent; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;                       /* 배경: 맨 뒤 */
+  background-image: url("/bg/main.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;              /* 클릭 막지 않기 */
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
