@@ -45,7 +45,7 @@ export default function HelloLottie({
   const [data, setData] = useState<any | null>(null);
 
   useEffect(() => {
-    fetch('/lottie/hello1.json')
+    fetch('/lottie/hello2.json')
       .then((r) => r.json())
       .then((json) => setData(stripWhiteBackground(json)))
       .catch(() => setData(null));
