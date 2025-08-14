@@ -9,7 +9,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AssistantContent from './assistant-content';
 
 export const Assistant = () => {
-  const runtime = useChatRuntime({ api: '/api/chat' });
+  const runtime = useChatRuntime({ api: `${process.env.NEXT_PUBLIC_API_URL}/api/chat` });
 
   // FlowUI 표시 여부
   const [showFlow, setShowFlow] = useState(false);

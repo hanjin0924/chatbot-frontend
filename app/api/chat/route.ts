@@ -1,3 +1,4 @@
+{/*
 import { azure } from "@ai-sdk/azure";
 import { frontendTools } from "@assistant-ui/react-ai-sdk";
 import { streamText, type CoreMessage } from "ai";
@@ -115,3 +116,4 @@ export async function POST(req: Request) {
     onError:           console.error,
   }).toDataStreamResponse();
 }
+*/}
