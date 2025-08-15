@@ -9,7 +9,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AssistantContent from './assistant-content';
 
 export const Assistant = () => {
-  const runtime = useChatRuntime({ api: `${process.env.NEXT_PUBLIC_API_URL}/api/chat` });
+  //const runtime = useChatRuntime({ api: `${process.env.NEXT_PUBLIC_API_URL}/api/chat` });
+  const runtime = useChatRuntime({ api: '/api/chat' });
 
   // FlowUI 표시 여부
   const [showFlow, setShowFlow] = useState(false);
@@ -22,7 +23,7 @@ export const Assistant = () => {
         {/* 사이드바에 플래그 전달 */}
         <AppSidebar showFlow={showFlow} blobName={blobName} />
         <AssistantContent 
-          runtime={runtime}
+          //runtime={runtime}
           onUploadStart={() => setShowFlow(true)}
           onUploadEnd={(name) => {
             setBlobName(name);

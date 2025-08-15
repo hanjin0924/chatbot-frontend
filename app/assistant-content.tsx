@@ -3,7 +3,6 @@
 
 import React, { useRef, DragEvent, ChangeEvent } from 'react';
 //import { useComposerRuntime } from '@assistant-ui/react';
-import { useChatRuntime } from '@assistant-ui/react-ai-sdk';
 import { Thread } from '@/components/assistant-ui/thread';
 import { SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -15,16 +14,16 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Paperclip, X } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 
 interface AssistantContentProps {
-  runtime: ReturnType<typeof useChatRuntime>;
+  // runtime: ReturnType<typeof useChatRuntime>;
   onUploadStart: () => void;
   onUploadEnd: (blobName: string) => void;
 }
 
 export default function AssistantContent({
-  runtime,
+  // runtime,
   onUploadStart,
   onUploadEnd,
 }: AssistantContentProps) {
@@ -50,12 +49,13 @@ export default function AssistantContent({
     const form = new FormData();
     form.append('file', file);
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload`, {
+    //const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload`, {
+    const res = await fetch('/api/upload', {
       method: 'POST',
       body: form,
     });
     if(!res.ok) {
-      const err = await res.text();
+      // const err = await res.text();
       throw new Error('업로드 실패: $(err)');
     }
     //const data = await res.json();

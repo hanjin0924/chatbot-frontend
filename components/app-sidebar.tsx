@@ -2,7 +2,6 @@
 'use client';
 
 import * as React from 'react';
-import { useStepPolling, Step } from '@/hooks/useStepPolling';
 import NextLink from 'next/link';
 import Image from 'next/image';
 
@@ -17,7 +16,6 @@ import {
 } from '@/components/ui/sidebar';
 import { ThreadList } from './assistant-ui/thread-list';
 import FlowUI from './FlowUI';
-import { Link as LinkIcon, MessagesSquare } from 'lucide-react';
 
 interface AppSidebarProps {
   showFlow?: boolean;

@@ -1,0 +1,17 @@
+# 절대 이미지에 보내지 말 것
+node_modules
+.next
+out
+
+# VCS & 잡파일
+.git
+.gitignore
+npm-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+yarn.lock
+
+# 로컬/도커 구성
+docker-compose*
+Dockerfile*
+.env*

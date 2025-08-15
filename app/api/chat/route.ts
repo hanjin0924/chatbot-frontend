@@ -117,3 +117,21 @@ export async function POST(req: Request) {
   }).toDataStreamResponse();
 }
 */}
+
+// app/api/chat/route.ts
+import { NextRequest } from "next/server";
+export const runtime = "nodejs";
+
+export async function POST(req: NextRequest) {
+  const api = process.env.API_BASE_URL ?? "http://api:4000"; // K8s Service DNS
+  const body = await req.json();
+  const r = await fetch(`${api}/api/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return new Response(await r.text(), {
+    status: r.status,
+    headers: { "content-type": r.headers.get("content-type") ?? "application/json" },
+  });
+}

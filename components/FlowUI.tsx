@@ -24,7 +24,8 @@ export default function FlowUI({ blobName }: FlowUIProps) {
   // useStepPolling 훅 호출 — 내부에 console.log가 모두 들어있습니다.
   const steps = useStepPolling({
     initialSteps,
-    apiBaseUrl: process.env.NEXT_PUBLIC_API_URL!,
+    //apiBaseUrl: process.env.NEXT_PUBLIC_API_URL!,
+    apiBaseUrl: "",
     blobName,
     intervalMs: 3000,
   })
