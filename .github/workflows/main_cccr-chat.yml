@@ -17,7 +17,7 @@ jobs:
       contents: read # actions/checkout
     
     env:
-      ACR_NAME: "crcicddevkrc01-fdbpdsdjbrhudtg3"
+      ACR_NAME: "crcicddevkrc01"
       ACR_IMAGE_NAME: "chatbot-frontend"
 
     steps:
