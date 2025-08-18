@@ -15,6 +15,10 @@ jobs:
     runs-on: [self-hosted,frontend]
     permissions:
       contents: read # actions/checkout
+    
+    env:
+      ACR_NAME: "crcicddevkrc01-fdbpdsdjbrhudtg3"
+      ACR_IMAGE_NAME: "chatbot-frontend"
 
     steps:
       - name: 'Checkout repository'
@@ -28,14 +32,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to ACR using Azure CLI
-        run: az acr login --name ${{ secrets.ACR_NAME }}
+        run: az acr login --name ${{ env.ACR_NAME }}
 
       # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
       # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
       - name: Set up Docker image tags
         run: |
-          echo "IMAGE_TAG_UNIQUE=${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.ACR_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "IMAGE_TAG_LATEST=${{ secrets.ACR_LOGIN_SERVER }}/${{ secrets.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG_UNIQUE=${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG_LATEST=${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
 
       # 5. Dockerfile을 사용해 이미지 빌드 및 ACR로 푸시
       - name: Build and push Docker image to ACR
