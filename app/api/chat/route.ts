@@ -116,7 +116,6 @@ export async function POST(req: Request) {
     onError:           console.error,
   }).toDataStreamResponse();
 }
-*/}
 
 // app/api/chat/route.ts
 import { NextRequest } from "next/server";
@@ -133,5 +132,25 @@ export async function POST(req: NextRequest) {
   return new Response(await r.text(), {
     status: r.status,
     headers: { "content-type": r.headers.get("content-type") ?? "application/json" },
+  });
+}
+*/}
+
+// app/api/chat/route.ts
+export async function POST(req: Request) {
+  const body = await req.json();
+  const r = await fetch(`${process.env.API_BASE_URL}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    // 중요: 스트리밍을 끊지 않고 그대로 전달
+    cache: "no-store",
+  });
+  return new Response(r.body, {
+    status: r.status,
+    headers: {
+      // Data Stream Protocol 헤더 그대로 통과
+      "Content-Type": r.headers.get("Content-Type") ?? "text/plain",
+    },
   });
 }
