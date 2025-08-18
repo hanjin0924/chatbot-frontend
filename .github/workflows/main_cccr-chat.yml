@@ -20,7 +20,6 @@ jobs:
     name: Build and push to ACR
     runs-on: [self-hosted,frontend]
     permissions:
-      # id-token: write # Azure OIDC Login
       contents: read # actions/checkout
 
     steps:
@@ -38,6 +37,8 @@ jobs:
         uses: azure/docker-login@v1
         with:
           login-server: ${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
 
       # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
       # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
