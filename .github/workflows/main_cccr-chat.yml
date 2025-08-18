@@ -44,8 +44,8 @@ jobs:
       # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
       - name: Set up Docker image tags
         run: |
-          echo "IMAGE_TAG_UNIQUE=${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "IMAGE_TAG_LATEST=${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG_UNIQUE=${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io/${{ secrets.ACR_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG_LATEST=${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io/${{ secrets.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
 
       # 5. Dockerfile을 사용해 이미지 빌드 및 ACR로 푸시
       - name: Build and push Docker image to ACR
