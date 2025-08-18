@@ -7,16 +7,10 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    types: [closed]
-    branches:
-      - main
   workflow_dispatch: # Manual
 
 jobs:
   build-and-push:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
-
     name: Build and push to ACR
     runs-on: [self-hosted,frontend]
     permissions:
