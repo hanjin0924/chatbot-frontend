@@ -27,12 +27,8 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: 'Login to ACR'
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.USERNAME }}
-          password: ${{ secrets.PASSWORD }}
+      - name: Login to ACR using Azure CLI
+        run: az acr login --name ${{ secrets.ACR_NAME }}
 
       # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
       # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
