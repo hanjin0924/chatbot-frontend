@@ -20,6 +20,7 @@ jobs:
     name: Build and push to ACR
     runs-on: [self-hosted,frontend]
     permissions:
+      id-token: write # Azure OIDC Login
       contents: read # actions/checkout
 
     env:
