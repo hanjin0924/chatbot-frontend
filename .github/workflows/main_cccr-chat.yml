@@ -20,35 +20,31 @@ jobs:
     name: Build and push to ACR
     runs-on: [self-hosted,frontend]
     permissions:
-      id-token: write # Azure OIDC Login
+      # id-token: write # Azure OIDC Login
       contents: read # actions/checkout
-
-    env:
-      ACR_LOGIN_SERVER: "crcicddevkrc01-fdbpdsdjbrhudtg3" # Login server
-      IMAGE_NAME: "chatbot-front"
 
     steps:
       - name: 'Checkout repository'
         uses: actions/checkout@v4
 
-      - name: 'Login to Azure using Managed ID'
+      - name: 'Login to Azure(Managed ID)'
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          auth-type: IDENTITY
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: 'Login to ACR'
         uses: azure/docker-login@v1
         with:
-          login-server: ${{ env.ACR_LOGIN_SERVER }}.azurecr.io
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io
 
       # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
       # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
       - name: Set up Docker image tags
         run: |
-          echo "IMAGE_TAG_UNIQUE=${{ env.ACR_LOGIN_SERVER }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "IMAGE_TAG_LATEST=${{ env.ACR_LOGIN_SERVER }}.azurecr.io/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG_UNIQUE=${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG_LATEST=${{ secrets.ACR_LOGIN_SERVER }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
 
       # 5. Dockerfile을 사용해 이미지 빌드 및 ACR로 푸시
       - name: Build and push Docker image to ACR
