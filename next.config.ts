@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   devIndicators: {
     position: "top-right", // bottom-left(기본), bottom-right, top-left, top-right
   },
+  output: "standalone"
 };
 
 export default nextConfig;
