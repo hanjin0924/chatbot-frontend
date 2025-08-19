@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - cccr-chat
+name: Build and push to ACR
 
 on:
   push:
@@ -34,14 +31,14 @@ jobs:
       - name: Login to ACR using Azure CLI
         run: az acr login --name ${{ env.ACR_NAME }}
 
-      # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
-      # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
       - name: Set up Docker image tags
         run: |
+          # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
           echo "IMAGE_TAG_UNIQUE=${{ env.ACR_NAME }}-${{ secrets.ACR_LOGIN_SERVER_HASH }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
+
+          # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
           echo "IMAGE_TAG_LATEST=${{ env.ACR_NAME }}-${{ secrets.ACR_LOGIN_SERVER_HASH }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
 
-      # 5. Dockerfile을 사용해 이미지 빌드 및 ACR로 푸시
       - name: Build and push Docker image to ACR
         run: |
           # 두 개의 태그로 이미지 빌드
