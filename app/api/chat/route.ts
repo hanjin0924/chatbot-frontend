@@ -173,9 +173,6 @@ export async function POST(req: NextRequest) {
     headers: { "content-type": "application/json" },
     body: bodyText,
     cache: "no-store",
-    // Node 18 타입 경고 회피용 힌트(실행엔 문제 없음)
-    // @ts-ignore
-    duplex: "half",
   });
 
   if (!r.body) {
