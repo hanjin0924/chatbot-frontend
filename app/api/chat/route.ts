@@ -150,7 +150,7 @@ export async function POST(req: Request) {
     status: r.status,
     headers: {
       // Data Stream Protocol 헤더 그대로 통과
-      "Content-Type": r.headers.get("Content-Type") ?? "text/plain",
+      "Content-Type": r.headers.get("Content-Type") ?? "application/json",
     },
   });
 }
