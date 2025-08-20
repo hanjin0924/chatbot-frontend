@@ -143,7 +143,7 @@ type HelloLottieProps = {
 
 const HelloLottie: React.FC<HelloLottieProps> = ({
   animationData,
-  src = "/lottie/hello2.json",
+  src = "/lottie/hello3.json",
   width = 500,
   loop = false,
   className,
