@@ -31,10 +31,15 @@ jobs:
       - name: Login to ACR using Azure CLI
         run: az acr login --name ${{ env.ACR_NAME }}
 
+      - name: Short SHA
+        id: vars
+        shell: bash
+        run: echo "sha7={GITHUB_SHA:0:7}" >> $GIHUB_OUTPUT
+
       - name: Set up Docker image tags
         run: |
           # 고유 태그: 커밋 해시를 사용해 버전을 명확히 추적
-          echo "IMAGE_TAG_UNIQUE=${{ env.ACR_NAME }}-${{ secrets.ACR_LOGIN_SERVER_HASH }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:${{ github.sha::7 }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG_UNIQUE=${{ env.ACR_NAME }}-${{ secrets.ACR_LOGIN_SERVER_HASH }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:${{ steps.vars.outputs.sha7 }}" >> $GITHUB_ENV
 
           # 최신 태그: 'latest' 태그는 개발/테스트 환경에서 편리하게 사용
           echo "IMAGE_TAG_LATEST=${{ env.ACR_NAME }}-${{ secrets.ACR_LOGIN_SERVER_HASH }}.azurecr.io/${{ env.ACR_IMAGE_NAME }}:latest" >> $GITHUB_ENV
@@ -48,3 +53,4 @@ jobs:
           docker push ${{ env.IMAGE_TAG_UNIQUE }}
 
           docker push ${{ env.IMAGE_TAG_LATEST }}
+
