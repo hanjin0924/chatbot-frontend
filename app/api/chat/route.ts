@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
 // app/api/chat/route.ts
 export async function POST(req: Request) {
   const body = await req.json();
-  const r = await fetch(`${process.env.API_BASE_URL}/chat`, {
+  const r = await fetch(`${process.env.API_BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
