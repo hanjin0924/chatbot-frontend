@@ -156,36 +156,40 @@ export async function POST(req: Request) {
 }
 */}
 // chatbot-aoai/app/api/chat/route.ts
+import type { NextRequest } from "next/server";
+
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-function joinApiChat(base: string) {
-  const b = (base || "http://api:4000").replace(/\/+$/, "");
-  return `${b}/api/chat`;
-}
+const API_BASE = (process.env.API_BASE_URL || "http://api:4000").replace(/\/+$/, "");
 
-export async function POST(req: Request) {
-  const body = await req.text(); // 스트림 안정성을 위해 text로 읽기
-  const upstream = joinApiChat(process.env.API_BASE_URL || "");
+export async function POST(req: NextRequest) {
+  // 스트리밍 안정성을 위해 문자열로 전달
+  const bodyText = await req.text();
+  const upstream = `${API_BASE}/api/chat`;
 
   const r = await fetch(upstream, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body,
+    body: bodyText,
     cache: "no-store",
-    // @ts-ignore - Node18 duplex 힌트
+    // Node 18 타입 경고 회피용 힌트(실행엔 문제 없음)
+    // @ts-ignore
     duplex: "half",
   });
+
+  if (!r.body) {
+    const t = await r.text().catch(() => "");
+    return new Response(t || "upstream has no body", {
+      status: r.status || 502,
+      headers: { "content-type": r.headers.get("content-type") ?? "text/plain; charset=utf-8" },
+    });
+  }
 
   const headers = new Headers();
   headers.set("content-type", r.headers.get("content-type") ?? "text/plain; charset=utf-8");
   const ds = r.headers.get("x-vercel-ai-data-stream");
   if (ds) headers.set("x-vercel-ai-data-stream", ds);
-
-  // 바디가 없을 때 대비
-  if (!r.body) {
-    const txt = await r.text().catch(() => "");
-    return new Response(txt || "upstream has no body", { status: r.status, headers });
-  }
 
   return new Response(r.body, { status: r.status, headers });
 }
