@@ -34,7 +34,7 @@ jobs:
       - name: Short SHA
         id: vars
         shell: bash
-        run: echo "sha7={GITHUB_SHA:0:7}" >> $GIHUB_OUTPUT
+        run: echo "sha7=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker image tags
         run: |
@@ -53,4 +53,5 @@ jobs:
           docker push ${{ env.IMAGE_TAG_UNIQUE }}
 
           docker push ${{ env.IMAGE_TAG_LATEST }}
+
 
