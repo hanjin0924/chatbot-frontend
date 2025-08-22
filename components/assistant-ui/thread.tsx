@@ -38,7 +38,7 @@ export const Thread: FC = () => {
         <div
           aria-hidden
           className="fixed inset-0 -z-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url(/bg/main.png)" }} // public/bg/main.png
+          //style={{ backgroundImage: "url(/bg/main.png)" }} // public/bg/main.png
         />
         <ThreadWelcome />
 
