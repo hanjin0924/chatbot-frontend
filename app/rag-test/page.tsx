@@ -47,9 +47,6 @@ export default function RagTestPage() {
   const { messages, sendMessage, status } = useChat({
     // v5에서는 커스텀 엔드포인트가 필요하면 transport를 쓰세요.
     // 기본값은 '/api/chat' 입니다.
-    transport: new DefaultChatTransport({
-    api: process.env.API_BASE_URL + '/api/chat',
-    }),
 
     /** 서버가 커스텀 data 파트를 스트리밍할 경우 */
     onData: (part) => {
