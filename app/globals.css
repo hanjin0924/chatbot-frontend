@@ -120,7 +120,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: 0;                       /* 배경: 맨 뒤 */
-  background-image: url("/bg/main.png");
+  /*background-image: url("/bg/main.png");*/
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
