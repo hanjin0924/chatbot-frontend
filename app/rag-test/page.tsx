@@ -4,63 +4,103 @@
 import { useChat } from '@ai-sdk/react';
 import { useState } from 'react';
 
+/** RAG 참조 패널용 타입 */
 type Ref = { label: string; title: string; url?: string; summary?: string };
 
+/** 메시지 파트 타입들 (최소한으로 사용) */
+type TextPart = { type: 'text'; text: string };
+type SourcePart = { type: 'source'; title?: string; url?: string; summary?: string };
+type DataReferencesPart = { type: 'data-references'; data: Ref[] };
+type AnyPart =
+  | TextPart
+  | SourcePart
+  | DataReferencesPart
+  | { type: string; [k: string]: unknown };
+
+/** 메시지 형태(최소한) */
+type Role = 'user' | 'assistant' | 'system' | 'tool';
+type MessageLike = {
+  id: string;
+  role: Role;
+  parts?: AnyPart[];
+  // 일부 런타임/버전은 content를 씁니다. 호환을 위해 포함
+  content?: string | Array<{ text?: string }>;
+};
+
+/** 타입 가드 */
+const isTextPart = (p: AnyPart): p is TextPart =>
+  (p as TextPart).type === 'text' && typeof (p as TextPart).text === 'string';
+
+const isSourcePart = (p: AnyPart): p is SourcePart =>
+  (p as SourcePart).type === 'source';
+
+const isDataReferencesPart = (p: unknown): p is DataReferencesPart =>
+  !!p && typeof p === 'object' && (p as { type?: string }).type === 'data-references';
+
 export default function RagTestPage() {
-  // 입력은 이제 직접 상태로 관리
+  /** 입력값은 v5에서 직접 관리 */
   const [input, setInput] = useState('');
-  // RAG 참조(우측 패널) 상태
+  /** 우측 패널에 표시할 RAG 참조 */
   const [refs, setRefs] = useState<Ref[]>([]);
 
   const { messages, sendMessage, status } = useChat({
-    // v5: 서버가 스트림으로 보내는 커스텀 데이터는 onData에서 받습니다.
-    // (서버가 'source' 또는 'data-references' 같은 파트를 보낸다고 가정)
+    // v5에서는 커스텀 엔드포인트가 필요하면 transport를 쓰세요.
+    // 기본값은 '/api/chat' 입니다.
+
+    /** 서버가 커스텀 data 파트를 스트리밍할 경우 */
     onData: (part) => {
-      if (part.type === 'data-references') {
-        // 서버가 writer.write({ type: 'data-references', data: [...] })로 보냈을 때
-        setRefs(part.data as Ref[]);
+      if (isDataReferencesPart(part)) {
+        setRefs(part.data);
       }
     },
 
-    // 스트리밍 종료 후, message.parts에서 'source' 파트를 추출해도 됩니다.
+    /** 스트림 종료 후 메시지의 source 파트를 모아 참조로 사용 */
     onFinish: ({ message }) => {
-      const sources =
-        (message.parts || [])
-          .filter((p: any) => p.type === 'source')
-          .map((p: any, i: number) => ({
-            label: `RAG#${i + 1}`,
-            title: p.title ?? '출처',
-            url: p.url,
-            summary: p.summary,
-          })) ?? [];
+      const m = message as MessageLike;
+      const parts = Array.isArray(m.parts) ? m.parts : [];
+      const sources: Ref[] = parts
+        .filter(isSourcePart)
+        .map((p, i) => ({
+          label: `RAG#${i + 1}`,
+          title: p.title ?? '출처',
+          url: p.url,
+          summary: p.summary,
+        }));
       if (sources.length) setRefs(sources);
     },
   });
 
   const isLoading = status === 'submitted' || status === 'streaming';
 
-  // v5: message.parts에서 text만 모아 렌더링
-  const renderMessage = (m: any) =>
-    (m.parts || [])
-      .filter((p: any) => p.type === 'text')
-      .map((p: any) => p.text)
-      .join('');
+  /** 메시지에서 텍스트만 추출 (parts 우선, 없으면 content 폴백) */
+  const renderMessageText = (m: MessageLike): string => {
+    if (Array.isArray(m.parts)) {
+      return m.parts.filter(isTextPart).map((p) => p.text).join('');
+    }
+    if (typeof m.content === 'string') return m.content;
+    if (Array.isArray(m.content)) {
+      return m.content.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('');
+    }
+    return '';
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    // v5: sendMessage({ text }) 형태로 전송
-    sendMessage({ text: input });
+    const q = input.trim();
+    if (!q) return;
+    // v5: sendMessage({ text })
+    sendMessage({ text: q });
     setInput('');
   };
 
   return (
     <div className="flex gap-6 p-4">
+      {/* 본문 */}
       <main className="flex-1">
         <h1 className="text-xl font-semibold mb-3">RAG 참조 테스트</h1>
 
         <div className="space-y-3">
-          {messages.map((m: any) => (
+          {(messages as MessageLike[]).map((m) => (
             <div
               key={m.id}
               className={
@@ -71,7 +111,7 @@ export default function RagTestPage() {
             >
               <div className="text-xs text-gray-500 mb-1">{m.role}</div>
               <div className="whitespace-pre-wrap break-words">
-                {renderMessage(m)}
+                {renderMessageText(m)}
               </div>
             </div>
           ))}
