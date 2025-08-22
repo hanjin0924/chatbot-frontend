@@ -43,8 +43,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const apiBase = (process.env.API_BASE_URL || "http://localhost:4000").replace(/\/+$/, "");
+  const apiBase = (process.env.API_BASE_URL || "http://api:4000").replace(/\/+$/, "");
   const upstream = `${apiBase}/api/chat`;
+  console.log("[proxy:/api/chat] upstream =>", upstream);
 
   try {
     const bodyText = await req.text();
