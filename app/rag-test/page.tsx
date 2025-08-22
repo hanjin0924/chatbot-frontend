@@ -3,7 +3,6 @@
 
 import { useChat } from '@ai-sdk/react';
 import { useState } from 'react';
-import { DefaultChatTransport } from 'ai';
 
 /** RAG 참조 패널용 타입 */
 type Ref = { label: string; title: string; url?: string; summary?: string };
