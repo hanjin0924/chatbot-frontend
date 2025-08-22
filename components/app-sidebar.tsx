@@ -29,16 +29,16 @@ export default function AppSidebar({ showFlow = false, blobName, }: AppSidebarPr
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <NextLink href="https://assistant-ui.com" target="_blank" className='flex items-center space-x-2'>
-                <div className="flex aspect-square size-12 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <NextLink href="https://assistant-ui.com" target="_blank" className='flex items-center space-x-2 space-y+3'>
+                <div className="flex aspect-square size-15 items-center justify-center rounded-lg text-sidebar-primary-foreground">
                   {/*<MessagesSquare className="size-8 shrink-0" />*/}
                   <Image src="/character.png" alt='assistant-ui' width={200} height={200}
-                    className='size-20 shrink-0 rounded-md object-contain'
+                    className='size-30 shrink-0 rounded-md object-contain'
                     priority
                   />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">AskiI_ChatBot</span>
+                  <span className="font-semibold text-2xl">AskiI</span>
                 </div>
               </NextLink>
             </SidebarMenuButton>

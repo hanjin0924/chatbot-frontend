@@ -94,12 +94,12 @@ export default function AssistantContent({
           <BreadcrumbList>
             <BreadcrumbItem className="hidden md:block">
               <BreadcrumbLink href="#">
-                DevOps &amp; SRE 엔지니어 부트캠프
+                GPT 4.1
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator className="hidden md:block" />
             <BreadcrumbItem>
-              <BreadcrumbPage>수강생 챗봇</BreadcrumbPage>
+              <BreadcrumbPage>Public / Protected / Internal</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -111,7 +111,7 @@ export default function AssistantContent({
       </div>
 
       {/* 📎 + 첨부파일 칩을 뷰포트 하단에 sticky footer로 배치 */}
-      <div className="sticky bottom-0 bg-white z-10 border-t px-4 py-2 flex items-center space-x-3">
+      <div className="sticky bottom-0 bg-white z-10 border-t px-4 py-2 mt-3 flex items-center space-x-3">
         {/* 파일 첨부 버튼 */}
         <button
           type="button"

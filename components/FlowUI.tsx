@@ -52,8 +52,8 @@ export default function FlowUI({ blobName }: FlowUIProps) {
             </div>
             <div className="w-full bg-gray-200 rounded-lg h-3 mt-1">
               <div
-                className="bg-green-500 h-3 rounded-lg flex items-center justify-center text-xs text-white"
-                style={{ width: `${s.pct}%` }}
+                className="h-3 rounded-lg flex items-center justify-center text-xs text-gray-800"
+                style={{ width: `${s.pct}%`, backgroundColor: '#aed7f3' }}
               >
                 {s.pct}%
               </div>
