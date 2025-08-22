@@ -1,40 +1,61 @@
 // app/rag-test/page.tsx
 'use client';
 
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { useState } from 'react';
 
 type Ref = { label: string; title: string; url?: string; summary?: string };
 
 export default function RagTestPage() {
-  // 1) refs는 별도 상태로만 관리
+  // 입력은 이제 직접 상태로 관리
+  const [input, setInput] = useState('');
+  // RAG 참조(우측 패널) 상태
   const [refs, setRefs] = useState<Ref[]>([]);
 
-  // 2) isLoading까지 구조분해
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/chat',
-    onFinish: (_message, extra: any) => {
-      // 서버가 스트림 메타데이터로 보낸 references 꺼내기 (버전 호환)
-      const incoming: Ref[] | null =
-        extra?.references ?? extra?.data?.references ?? null;
-      if (incoming) setRefs(incoming);
+  const { messages, sendMessage, status } = useChat({
+    // v5: 서버가 스트림으로 보내는 커스텀 데이터는 onData에서 받습니다.
+    // (서버가 'source' 또는 'data-references' 같은 파트를 보낸다고 가정)
+    onData: (part) => {
+      if (part.type === 'data-references') {
+        // 서버가 writer.write({ type: 'data-references', data: [...] })로 보냈을 때
+        setRefs(part.data as Ref[]);
+      }
+    },
+
+    // 스트리밍 종료 후, message.parts에서 'source' 파트를 추출해도 됩니다.
+    onFinish: ({ message }) => {
+      const sources =
+        (message.parts || [])
+          .filter((p: any) => p.type === 'source')
+          .map((p: any, i: number) => ({
+            label: `RAG#${i + 1}`,
+            title: p.title ?? '출처',
+            url: p.url,
+            summary: p.summary,
+          })) ?? [];
+      if (sources.length) setRefs(sources);
     },
   });
 
-  // 3) 안전 렌더링 (암시적 any 제거)
-  const renderText = (m: any) => {
-    if (typeof m?.content === 'string') return m.content;
-    if (Array.isArray(m?.content)) {
-      return (m.content as Array<{ text?: string }>)
-        .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-        .join('');
-    }
-    return '';
+  const isLoading = status === 'submitted' || status === 'streaming';
+
+  // v5: message.parts에서 text만 모아 렌더링
+  const renderMessage = (m: any) =>
+    (m.parts || [])
+      .filter((p: any) => p.type === 'text')
+      .map((p: any) => p.text)
+      .join('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    // v5: sendMessage({ text }) 형태로 전송
+    sendMessage({ text: input });
+    setInput('');
   };
 
   return (
     <div className="flex gap-6 p-4">
-      {/* 본문 */}
       <main className="flex-1">
         <h1 className="text-xl font-semibold mb-3">RAG 참조 테스트</h1>
 
@@ -50,7 +71,7 @@ export default function RagTestPage() {
             >
               <div className="text-xs text-gray-500 mb-1">{m.role}</div>
               <div className="whitespace-pre-wrap break-words">
-                {renderText(m)}
+                {renderMessage(m)}
               </div>
             </div>
           ))}
@@ -61,13 +82,9 @@ export default function RagTestPage() {
             className="flex-1 border rounded-lg px-3 py-2"
             placeholder="질문을 입력하세요"
             value={input}
-            onChange={handleInputChange}
+            onChange={(e) => setInput(e.target.value)}
           />
-          <button
-            type="submit"
-            className="border rounded-lg px-3 py-2"
-            disabled={isLoading}
-          >
+          <button type="submit" className="border rounded-lg px-3 py-2" disabled={isLoading}>
             보내기
           </button>
         </form>
@@ -83,16 +100,9 @@ export default function RagTestPage() {
                 <div className="text-sm font-medium">
                   {r.label} · {r.title}
                 </div>
-                {r.summary && (
-                  <div className="text-xs text-gray-600">{r.summary}</div>
-                )}
+                {r.summary && <div className="text-xs text-gray-600">{r.summary}</div>}
                 {r.url && (
-                  <a
-                    href={r.url}
-                    target="_blank"
-                    className="text-xs underline"
-                    rel="noreferrer"
-                  >
+                  <a href={r.url} target="_blank" className="text-xs underline" rel="noreferrer">
                     원문 열기
                   </a>
                 )}
