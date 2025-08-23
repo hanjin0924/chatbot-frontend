@@ -25,6 +25,7 @@ import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { ToolFallback } from "./tool-fallback";
 import HelloLottie from "../HelloLottie";
+import { SourcePill } from "./source-pill";
 
 export const Thread: FC = () => {
   return (
@@ -216,6 +217,13 @@ const AssistantMessage: FC = () => {
         <MessagePrimitive.Content
           components={{ Text: MarkdownText, tools: { Fallback: ToolFallback } }}
         />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <MessagePrimitive.Parts
+            components={{
+              Source: SourcePill, // 백엔드가 스트리밍한 type:"source" 파트를 뱃지로 렌더
+            }}
+          />
+        </div>
       </div>
 
       <AssistantActionBar />

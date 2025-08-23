@@ -106,6 +106,8 @@ export default function AssistantContent({
       </header>
 
       {/* 메시지 리스트 + 내장 Composer(input) */}
+    
+    
       <div className="flex-1 flex flex-col">
         <Thread />
       </div>
