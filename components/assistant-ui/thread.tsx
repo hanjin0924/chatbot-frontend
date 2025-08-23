@@ -48,39 +48,49 @@ export const Thread: FC = () => {
   // Viewport 스크롤 상태 감지(하단 근접 여부)
   useEffect(() => {
     const root = viewportRef.current ?? document.getElementById("thread-viewport");
-    if (!root) return;
+    const bottom = bottomRef.current;
+    if (!root || !bottom) return;
 
-    const computeNearBottom = () => {
-      const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 120; // 임계치 120px
-      setShouldAutoScroll(nearBottom);
-    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        // root 하단에서 120px 위까지 들어오면 isIntersecting 판정(= auto-scroll ON)
+        setShouldAutoScroll(entry.isIntersecting);
+      },
+      {
+        root,                 // 스크롤 컨테이너
+        threshold: 0.01,      // 살짝만 보여도 true
+        rootMargin: "0px 0px -120px 0px", // 하단 120px을 '보이지 않는 영역'으로 간주
+      }
+    );
 
-    // 스크롤 시 하단 근접 여부 갱신
-    const onScroll = () => computeNearBottom();
-    root.addEventListener("scroll", onScroll, { passive: true });
+    io.observe(bottom);
 
-    // 초기 한 번 계산
-    computeNearBottom();
+    // 처음 진입 시 한 번 하단 정렬
+    try { bottom.scrollIntoView({ behavior: "auto", block: "end" }); } catch {}
 
-    return () => root.removeEventListener("scroll", onScroll);
+    return () => io.disconnect();
   }, []);
 
   useEffect(() => {
     const list = messagesRootRef.current;
-    const root = messagesRootRef.current;
     const bottom = bottomRef.current;
-    if (!list || !root || !bottom) return;
-
-    // 최초 진입 시 한 번 하단 맞추기
-    try { bottom.scrollIntoView({ behavior: "auto", block: "end" }); } catch {}
+    if (!list || !bottom) return;
 
     // 메시지 DOM 변경 감지 → 하단으로 스크롤
     const obs = new MutationObserver((muts) => {
       if (!autoScrollRef.current) return;
-
+      
+      let scheduled = false;
       for (const m of muts) {
         if (m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)) {
-          try { bottom.scrollIntoView({ behavior: "smooth", block: "end" }); } catch {}
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(() => {
+              try { bottom.scrollIntoView({ behavior: "smooth", block: "end" }); } catch {}
+              scheduled = false;
+            });
+          }
           break;
         }
       }
