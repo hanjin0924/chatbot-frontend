@@ -512,16 +512,11 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-4">
       <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
         <MessagePrimitive.Content
-          components={{ Text: MarkdownText, tools: { Fallback: ToolFallback } }}
+          components={{ 
+            Text: MarkdownText, tools: { Fallback: ToolFallback }, 
+            Source: SourcePill,
+          }}
         />
-        {/* 🔽 추가: 근거 소스(RAG#n) 뱃지 렌더 영역 */}
-        <div className="mt-2 flex flex-wrap gap-2">
-          <MessagePrimitive.Parts
-            components={{
-              Source: SourcePill, // 백엔드가 스트리밍한 type:"source" 파트를 뱃지로 렌더
-            }}
-          />
-        </div>
       </div>
 
       <AssistantActionBar />
