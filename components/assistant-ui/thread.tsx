@@ -25,10 +25,35 @@ import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { ToolFallback } from "./tool-fallback";
 import HelloLottie from "../HelloLottie";
-// 🔽 추가: RAG 소스 뱃지 컴포넌트
 import { SourcePill } from "@/components/assistant-ui/source-pill";
+import { useEffect, useRef } from "react";
 
 export const Thread: FC = () => {
+
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesRootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const root = messagesRootRef.current;
+    const bottom = bottomRef.current;
+    if (!root || !bottom) return;
+
+    // 최초 진입 시 한 번 하단 맞추기
+    try { bottom.scrollIntoView({ behavior: "auto", block: "end" }); } catch {}
+
+    // 메시지 DOM 변경 감지 → 하단으로 스크롤
+    const obs = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)) {
+          try { bottom.scrollIntoView({ behavior: "smooth", block: "end" }); } catch {}
+          break;
+        }
+      }
+    });
+    obs.observe(root, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, []);
+
   return (
     <ThreadPrimitive.Root
       className="bg-background box-border flex h-full flex-col overflow-hidden"
@@ -43,18 +68,21 @@ export const Thread: FC = () => {
           //style={{ backgroundImage: "url(/bg/main.png)" }} // public/bg/main.png
         />
         <ThreadWelcome />
-
-        <ThreadPrimitive.Messages
-          components={{
+        <div ref={messagesRootRef} className="w-full flex flex-col items-center">
+          <ThreadPrimitive.Messages
+            components={{
             UserMessage: UserMessage,
             EditComposer: EditComposer,
             AssistantMessage: AssistantMessage,
-          }}
-        />
+            }}
+          />
+        </div>
 
         <ThreadPrimitive.If empty={false}>
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
+        
+        <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden />
 
         <div className="sticky z-10 bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-0">
           <ThreadScrollToBottom />
