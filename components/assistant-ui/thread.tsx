@@ -7,7 +7,7 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
 } from "@assistant-ui/react";
-import type { FC } from "react";
+import type { FC, RefCallback } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -35,6 +35,10 @@ export const Thread: FC = () => {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+
+  const setViewportRef: RefCallback<HTMLDivElement> = (el) => {
+     viewportRef.current = el;
+   };
 
     // 최신 상태를 Observer에서 안정적으로 읽기 위해 ref에 복제
   useEffect(() => {
@@ -94,7 +98,7 @@ export const Thread: FC = () => {
       }}
     >
       <ThreadPrimitive.Viewport
-        ref={viewportRef as any}
+        ref={setViewportRef}
         id="thread-viewport"
         className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8"
       >
