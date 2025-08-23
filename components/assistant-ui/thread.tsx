@@ -26,23 +26,54 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { ToolFallback } from "./tool-fallback";
 import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const Thread: FC = () => {
 
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const autoScrollRef = useRef(true)
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+
+    // 최신 상태를 Observer에서 안정적으로 읽기 위해 ref에 복제
+  useEffect(() => {
+    autoScrollRef.current = shouldAutoScroll;
+  }, [shouldAutoScroll]);
+
+  // Viewport 스크롤 상태 감지(하단 근접 여부)
+  useEffect(() => {
+    const root = viewportRef.current ?? document.getElementById("thread-viewport");
+    if (!root) return;
+
+    const computeNearBottom = () => {
+      const nearBottom = root.scrollHeight - root.scrollTop - root.clientHeight < 120; // 임계치 120px
+      setShouldAutoScroll(nearBottom);
+    };
+
+    // 스크롤 시 하단 근접 여부 갱신
+    const onScroll = () => computeNearBottom();
+    root.addEventListener("scroll", onScroll, { passive: true });
+
+    // 초기 한 번 계산
+    computeNearBottom();
+
+    return () => root.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
+    const list = messagesRootRef.current;
     const root = messagesRootRef.current;
     const bottom = bottomRef.current;
-    if (!root || !bottom) return;
+    if (!list || !root || !bottom) return;
 
     // 최초 진입 시 한 번 하단 맞추기
     try { bottom.scrollIntoView({ behavior: "auto", block: "end" }); } catch {}
 
     // 메시지 DOM 변경 감지 → 하단으로 스크롤
     const obs = new MutationObserver((muts) => {
+      if (!autoScrollRef.current) return;
+
       for (const m of muts) {
         if (m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)) {
           try { bottom.scrollIntoView({ behavior: "smooth", block: "end" }); } catch {}
@@ -50,7 +81,8 @@ export const Thread: FC = () => {
         }
       }
     });
-    obs.observe(root, { childList: true, subtree: true });
+
+    obs.observe(list, { childList: true, subtree: true });
     return () => obs.disconnect();
   }, []);
 
@@ -61,11 +93,14 @@ export const Thread: FC = () => {
         ["--thread-max-width" as string]: "42rem",
       }}
     >
-      <ThreadPrimitive.Viewport className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8">
+      <ThreadPrimitive.Viewport
+        ref={viewportRef as any}
+        id="thread-viewport"
+        className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8"
+      >
         <div
           aria-hidden
           className="fixed inset-0 -z-0 bg-cover bg-center bg-no-repeat"
-          //style={{ backgroundImage: "url(/bg/main.png)" }} // public/bg/main.png
         />
         <ThreadWelcome />
         <div ref={messagesRootRef} className="w-full flex flex-col items-center">
