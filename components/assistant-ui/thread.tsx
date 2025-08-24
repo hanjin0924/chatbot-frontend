@@ -28,15 +28,24 @@ import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** 바닥 판정: 사용자가 '완전 하단'에 있을 때만 true (조금만 올려도 false) */
+/** 바닥 판정: '완전 하단'에서만 true (조금만 올려도 false) */
 function isAtBottom(el: HTMLElement, epsilon = 2) {
   const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
-  return gap <= epsilon; // 0~2px 오차 허용
+  return gap <= epsilon;
 }
 
 export const Thread: FC = () => {
+  // 오토스크롤 on/off (UI 표시용)
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const autoScrollRef = useRef(true); // 최신값 조회용
+
+  // 최신 상태/락/의도 유지용 ref들
+  const autoScrollRef = useRef(true);             // shouldAutoScroll의 최신값
+  const freezeRef = useRef(false);                // 사용자가 위로 올린 뒤 해제 전까지 true
+  const userIntentRef = useRef(false);            // 직전 스크롤이 사용자 의도였는지
+  const intentTimerRef = useRef<number | null>(null);
+  const lastScrollTopRef = useRef(0);
+
+  // 앵커/컨테이너 refs
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -45,29 +54,91 @@ export const Thread: FC = () => {
     viewportRef.current = el;
   };
 
-  // 최신 상태를 Observer에서 참조할 수 있게 ref 동기화
+  // 상태 ↔ ref 동기화
   useEffect(() => {
     autoScrollRef.current = shouldAutoScroll;
   }, [shouldAutoScroll]);
 
-  // ✅ 스크롤 이벤트로 바닥 여부 판정 (사용자가 조금만 올려도 자동 스크롤 꺼짐)
+  // 사용자 의도 플래그 ON (800ms 후 자동 해제)
+  const armUserIntent = useCallback(() => {
+    userIntentRef.current = true;
+    if (intentTimerRef.current) window.clearTimeout(intentTimerRef.current);
+    intentTimerRef.current = window.setTimeout(() => {
+      userIntentRef.current = false;
+      intentTimerRef.current = null;
+    }, 800);
+  }, []);
+
+  // 스크롤 컨테이너에서 사용자 입력 이벤트로 의도 플래그 set
+  useEffect(() => {
+    const root =
+      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    if (!root) return;
+
+    const onPointer = () => armUserIntent();
+    root.addEventListener("wheel", onPointer, { passive: true });
+    root.addEventListener("touchstart", onPointer, { passive: true });
+    root.addEventListener("pointerdown", onPointer, { passive: true });
+
+    return () => {
+      root.removeEventListener("wheel", onPointer);
+      root.removeEventListener("touchstart", onPointer);
+      root.removeEventListener("pointerdown", onPointer);
+    };
+  }, [armUserIntent]);
+
+  // ✅ 스크롤 이벤트: 사용자 의도일 때만 바닥/락 상태를 갱신
   useEffect(() => {
     const root =
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (!root) return;
 
     const onScroll = () => {
-      setShouldAutoScroll(isAtBottom(root)); // 바닥일 때만 true
+      if (!userIntentRef.current) {
+        // 프로그램틱 스크롤(예: 포커스 이동, 프레임워크 내부 스크롤)은 무시
+        return;
+      }
+
+      const now = root.scrollTop;
+      const prev = lastScrollTopRef.current;
+      lastScrollTopRef.current = now;
+
+      const goingUp = now < prev;
+
+      if (goingUp) {
+        // 위로 올리면 즉시 락 + 오토스크롤 OFF
+        if (!freezeRef.current) {
+          freezeRef.current = true;
+        }
+        if (autoScrollRef.current) {
+          autoScrollRef.current = false;
+          setShouldAutoScroll(false);
+        }
+        return;
+      }
+
+      // 아래로 내려가는 중: '완전 하단' 도달했을 때만 락 해제 + 오토스크롤 ON
+      if (isAtBottom(root)) {
+        if (freezeRef.current) freezeRef.current = false;
+        if (!autoScrollRef.current) {
+          autoScrollRef.current = true;
+          setShouldAutoScroll(true);
+        }
+      }
     };
 
     root.addEventListener("scroll", onScroll, { passive: true });
-    // 초기 계산
-    onScroll();
+
+    // 초기 상태: 새 세션에선 바닥으로 맞춤
+    lastScrollTopRef.current = root.scrollTop;
+    try {
+      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    } catch {}
 
     return () => root.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ✅ 새 메시지 DOM 변경 시: 오직 '현재 바닥일 때'만 하단으로 스크롤
+  // ✅ 새 메시지 추가/삭제 시: 락이 해제되어 있고 + 오토스크롤 ON일 때만 하단 이동
   useEffect(() => {
     const list = messagesRootRef.current;
     const bottom = bottomRef.current;
@@ -75,14 +146,9 @@ export const Thread: FC = () => {
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (!list || !bottom || !root) return;
 
-    // 첫 진입은 한 번 하단 정렬
-    try {
-      bottom.scrollIntoView({ behavior: "auto", block: "end" });
-    } catch {}
-
     const mo = new MutationObserver((muts) => {
-      // 현재 사용자가 바닥에 있을 때만 자동 스크롤 허용
-      if (!isAtBottom(root)) return;
+      if (freezeRef.current || !autoScrollRef.current) return; // 잠겨있으면 무시
+      if (!isAtBottom(root)) return;                           // 현재 바닥이 아니면 무시
 
       let scheduled = false;
       for (const m of muts) {
@@ -105,7 +171,7 @@ export const Thread: FC = () => {
     return () => mo.disconnect();
   }, []);
 
-  // ✅ 스트리밍 등으로 메시지 높이가 늘어날 때: '현재 바닥'일 때만 자동 스크롤
+  // ✅ 메시지 높이 변화(스트리밍 등) 시: 락 해제 + 바닥일 때만 미세 조정
   useEffect(() => {
     const list = messagesRootRef.current;
     const bottom = bottomRef.current;
@@ -113,10 +179,11 @@ export const Thread: FC = () => {
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (!list || !bottom || !root) return;
 
-    if (typeof ResizeObserver === "undefined") return; // 비지원 환경 가드
+    if (typeof ResizeObserver === "undefined") return;
 
     const ro = new ResizeObserver(() => {
-      if (!isAtBottom(root)) return; // 바닥 아닐 때는 스킵
+      if (freezeRef.current || !autoScrollRef.current) return;
+      if (!isAtBottom(root)) return;
       try {
         bottom.scrollIntoView({ behavior: "auto", block: "end" });
       } catch {}
@@ -126,8 +193,9 @@ export const Thread: FC = () => {
     return () => ro.disconnect();
   }, []);
 
-  // ✅ 수동 "맨 아래" 버튼: 즉시 하단 이동 + 자동 스크롤 재활성화
+  // ✅ 사용자가 명시적으로 "맨 아래" 버튼 클릭 → 락 해제 + 오토스크롤 ON + 하단 이동
   const onJumpBottom = useCallback(() => {
+    freezeRef.current = false;
     autoScrollRef.current = true;
     setShouldAutoScroll(true);
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -143,13 +211,10 @@ export const Thread: FC = () => {
         id="thread-viewport"
         className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8"
       >
-        <div
-          aria-hidden
-          className="fixed inset-0 -z-0 bg-cover bg-center bg-no-repeat"
-        />
+        <div aria-hidden className="fixed inset-0 -z-0 bg-cover bg-center bg-no-repeat" />
         <ThreadWelcome />
 
-        {/* 메시지 목록 컨테이너: DOM/높이 변화 관찰 대상 */}
+        {/* 메시지 목록 컨테이너 */}
         <div ref={messagesRootRef} className="w-full flex flex-col items-center">
           <ThreadPrimitive.Messages
             components={{
@@ -164,7 +229,7 @@ export const Thread: FC = () => {
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
 
-        {/* 하단 앵커: Intersection 대신 스크롤 기준 사용 → 1px 높이로 충분 */}
+        {/* 하단 앵커 (유일한 바닥 기준) */}
         <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden className="h-px" />
 
         <div className="sticky z-10 bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-0">
@@ -279,11 +344,9 @@ const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root className="z-10 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 [&:where(>*)]:col-start-2 w-full max-w-[var(--thread-max-width)] py-4">
       <UserActionBar />
-
       <div className="bg-white text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words rounded-3xl px-5 py-2.5 col-start-2 row-start-2">
         <MessagePrimitive.Content />
       </div>
-
       <BranchPicker className="col-span-full col-start-1 row-start-3 -mr-1 justify-end" />
     </MessagePrimitive.Root>
   );
@@ -309,7 +372,6 @@ const EditComposer: FC = () => {
   return (
     <ComposerPrimitive.Root className="bg-muted my-4 flex w-full max-w-[var(--thread-max-width)] flex-col gap-2 rounded-xl">
       <ComposerPrimitive.Input className="text-foreground flex h-8 w-full resize-none bg-transparent p-4 pb-0 outline-none" />
-
       <div className="mx-3 mb-3 flex items-center justify-center gap-2 self-end">
         <ComposerPrimitive.Cancel asChild>
           <Button variant="ghost">Cancel</Button>
@@ -334,7 +396,6 @@ const AssistantMessage: FC = () => {
           }}
         />
       </div>
-
       <AssistantActionBar />
       <BranchPicker className="col-start-2 row-start-2 -ml-2 mr-2" />
     </MessagePrimitive.Root>
@@ -375,10 +436,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
-      className={cn(
-        "text-muted-foreground inline-flex items-center text-xs",
-        className
-      )}
+      className={cn("text-muted-foreground inline-flex items-center text-xs", className)}
       {...rest}
     >
       <BranchPickerPrimitive.Previous asChild>
@@ -400,13 +458,7 @@ const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
 
 const CircleStopIcon = () => {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      width="16"
-      height="16"
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" width="16" height="16">
       <rect width="10" height="10" x="3" y="3" rx="2" />
     </svg>
   );
