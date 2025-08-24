@@ -34,7 +34,7 @@ function isAtBottom(el: HTMLElement, epsilon = 2) {
   return gap <= epsilon;
 }
 
-/** 현재 메시지 개수(우리 커스텀 루트에 붙인 클래스 기준) */
+/** 현재 메시지 개수(커스텀 루트 클래스 기준) */
 function getMessageCount(container: HTMLElement | null) {
   if (!container) return 0;
   return container.querySelectorAll<HTMLElement>(".aui-msg").length;
@@ -46,9 +46,11 @@ export const Thread: FC = () => {
 
   // 내부 제어
   const autoScrollRef = useRef(true);          // shouldAutoScroll 미러
-  const freezeRef = useRef(false);             // 위로 올리면 true, 바닥 복귀/버튼 전까지 유지
+  const freezeRef = useRef(false);             // 유저가 "위로" 스크롤하면 true
+  const hasUserScrolledUpRef = useRef(false);  // 유저가 위로 스크롤한 적 있는가
   const programmaticScrollRef = useRef(false); // 우리가 만든 스크롤은 판정 제외
   const lastCountRef = useRef(0);              // 마지막 메시지 개수
+  const lastScrollTopRef = useRef(0);          // 스크롤 방향 판정용
 
   // DOM ref
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -76,31 +78,43 @@ export const Thread: FC = () => {
     }
   }, []);
 
-  // 첫 진입 시 한 번 하단 정렬 + 초기 메시지 개수 세팅
+  // 첫 진입 시 한 번 하단 정렬 + 초기 메시지 개수/스크롤탑 세팅
   useEffect(() => {
     scrollToBottom("auto");
     lastCountRef.current = getMessageCount(messagesRootRef.current);
+    const root = viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    if (root) lastScrollTopRef.current = root.scrollTop;
   }, [scrollToBottom]);
 
-  // 스크롤 이벤트: 바닥 이탈 시 즉시 freeze, 바닥 복귀 시 해제
+  // 스크롤 이벤트: "위로" 스크롤했을 때만 freeze, 바닥 복귀 시 해제
   useEffect(() => {
     const root =
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (!root) return;
 
     const onScroll = () => {
-      if (programmaticScrollRef.current) return; // 우리가 만든 스크롤은 무시
-      const atBottom = isAtBottom(root);
+      if (programmaticScrollRef.current) { // 우리가 만든 스크롤은 무시
+        lastScrollTopRef.current = root.scrollTop;
+        return;
+      }
 
-      if (!atBottom) {
-        // 사용자가 올림 → 즉시 freeze + auto OFF
+      const dy = root.scrollTop - lastScrollTopRef.current; // >0 내려감 / <0 올라감
+      lastScrollTopRef.current = root.scrollTop;
+
+      if (dy < -2) {
+        // 유저가 위로 스크롤 → 즉시 freeze
+        hasUserScrolledUpRef.current = true;
         if (!freezeRef.current) freezeRef.current = true;
         if (autoScrollRef.current) {
           autoScrollRef.current = false;
           setShouldAutoScroll(false);
         }
-      } else {
-        // 사용자가 바닥까지 다시 내렸을 때만 해제
+        return;
+      }
+
+      // 내려가는 중이거나( dy>0 ) 정지( |dy|<=2 )
+      if (isAtBottom(root)) {
+        // 바닥 복귀 → 해제
         if (freezeRef.current) freezeRef.current = false;
         if (!autoScrollRef.current) {
           autoScrollRef.current = true;
@@ -113,16 +127,27 @@ export const Thread: FC = () => {
     return () => root.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ✅ 새 메시지 "추가"에만 반응(개수 증가 시에만)
+  // ✅ "새 메시지 추가"에만 반응
+  //  - 첫 메시지 추가( lastCount=0 → current>0 )는 무조건 하단으로
+  //  - 이후엔 freeze 상태면 절대 자동 스크롤 안 함
   useEffect(() => {
     const container = messagesRootRef.current;
     if (!container) return;
 
     const mo = new MutationObserver(() => {
       const current = getMessageCount(container);
-      if (current > lastCountRef.current) {
-        // 새 메시지가 생김
+      const prev = lastCountRef.current;
+
+      if (current > prev) {
         lastCountRef.current = current;
+
+        // 첫 메시지 추가는 무조건 붙이기(초기 UX)
+        if (prev === 0) {
+          scrollToBottom("smooth");
+          return;
+        }
+
+        // 이후엔 "유저가 위로 스크롤해서 freeze된 경우"엔 자동 스크롤 금지
         if (!freezeRef.current) {
           scrollToBottom("smooth");
         }
@@ -130,15 +155,14 @@ export const Thread: FC = () => {
       // 개수 동일(스트리밍/리렌더) → 무시
     });
 
-    // subtree:true로 감시하되, "개수 증가" 조건만 사용
     mo.observe(container, { childList: true, subtree: true });
-
     return () => mo.disconnect();
   }, [scrollToBottom]);
 
   // "맨 아래" 버튼: 잠금 해제 + 하단 이동
   const onJumpBottom = useCallback(() => {
     freezeRef.current = false;
+    hasUserScrolledUpRef.current = false; // 다시 초기 상태처럼
     if (!autoScrollRef.current) {
       autoScrollRef.current = true;
       setShouldAutoScroll(true);
