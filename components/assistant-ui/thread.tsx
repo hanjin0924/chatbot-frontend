@@ -26,7 +26,7 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { ToolFallback } from "./tool-fallback";
 import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /** 하단 도달 여부(근사) */
 function isAtBottom(el: HTMLElement, epsilon = 2) {
