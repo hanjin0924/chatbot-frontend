@@ -28,9 +28,15 @@ import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** 바닥 판정: 사용자가 '완전 하단'에 있을 때만 true (조금만 올려도 false) */
+function isAtBottom(el: HTMLElement, epsilon = 2) {
+  const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
+  return gap <= epsilon; // 0~2px 오차 허용
+}
+
 export const Thread: FC = () => {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const autoScrollRef = useRef(true);
+  const autoScrollRef = useRef(true); // 최신값 조회용
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -39,46 +45,44 @@ export const Thread: FC = () => {
     viewportRef.current = el;
   };
 
-  // 최신 상태를 Observer에서 안정적으로 읽기 위해 ref에 복제
+  // 최신 상태를 Observer에서 참조할 수 있게 ref 동기화
   useEffect(() => {
     autoScrollRef.current = shouldAutoScroll;
   }, [shouldAutoScroll]);
 
-  // 하단 앵커 보임 여부로 자동 스크롤 on/off
+  // ✅ 스크롤 이벤트로 바닥 여부 판정 (사용자가 조금만 올려도 자동 스크롤 꺼짐)
   useEffect(() => {
-    const root = viewportRef.current ?? document.getElementById("thread-viewport");
-    const bottom = bottomRef.current;
-    if (!root || !bottom) return;
+    const root =
+      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    if (!root) return;
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        setShouldAutoScroll(entry.isIntersecting);
-      },
-      {
-        root,
-        threshold: 0.01,
-        // 하단 120px 여유: 근접하면 isIntersecting = true
-        rootMargin: "0px 0px 120px 0px",
-      }
-    );
+    const onScroll = () => {
+      setShouldAutoScroll(isAtBottom(root)); // 바닥일 때만 true
+    };
 
-    io.observe(bottom);
+    root.addEventListener("scroll", onScroll, { passive: true });
+    // 초기 계산
+    onScroll();
 
-    // 처음 진입 시 한 번 하단 정렬
-    try { bottom.scrollIntoView({ behavior: "auto", block: "end" }); } catch {}
-
-    return () => io.disconnect();
+    return () => root.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ✅ 새 메시지 추가되면 (자동 스크롤 on일 때만) 하단으로
+  // ✅ 새 메시지 DOM 변경 시: 오직 '현재 바닥일 때'만 하단으로 스크롤
   useEffect(() => {
     const list = messagesRootRef.current;
     const bottom = bottomRef.current;
-    if (!list || !bottom) return;
+    const root =
+      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    if (!list || !bottom || !root) return;
 
-    const obs = new MutationObserver((muts) => {
-      if (!autoScrollRef.current) return;
+    // 첫 진입은 한 번 하단 정렬
+    try {
+      bottom.scrollIntoView({ behavior: "auto", block: "end" });
+    } catch {}
+
+    const mo = new MutationObserver((muts) => {
+      // 현재 사용자가 바닥에 있을 때만 자동 스크롤 허용
+      if (!isAtBottom(root)) return;
 
       let scheduled = false;
       for (const m of muts) {
@@ -86,7 +90,9 @@ export const Thread: FC = () => {
           if (!scheduled) {
             scheduled = true;
             requestAnimationFrame(() => {
-              try { bottom.scrollIntoView({ behavior: "smooth", block: "end" }); } catch {}
+              try {
+                bottom.scrollIntoView({ behavior: "smooth", block: "end" });
+              } catch {}
               scheduled = false;
             });
           }
@@ -95,11 +101,32 @@ export const Thread: FC = () => {
       }
     });
 
-    obs.observe(list, { childList: true, subtree: true });
-    return () => obs.disconnect();
+    mo.observe(list, { childList: true, subtree: true });
+    return () => mo.disconnect();
   }, []);
 
-  // 수동 "맨 아래" 버튼 클릭 시: 바로 이동 + 자동 스크롤 켜기
+  // ✅ 스트리밍 등으로 메시지 높이가 늘어날 때: '현재 바닥'일 때만 자동 스크롤
+  useEffect(() => {
+    const list = messagesRootRef.current;
+    const bottom = bottomRef.current;
+    const root =
+      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    if (!list || !bottom || !root) return;
+
+    if (typeof ResizeObserver === "undefined") return; // 비지원 환경 가드
+
+    const ro = new ResizeObserver(() => {
+      if (!isAtBottom(root)) return; // 바닥 아닐 때는 스킵
+      try {
+        bottom.scrollIntoView({ behavior: "auto", block: "end" });
+      } catch {}
+    });
+
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, []);
+
+  // ✅ 수동 "맨 아래" 버튼: 즉시 하단 이동 + 자동 스크롤 재활성화
   const onJumpBottom = useCallback(() => {
     autoScrollRef.current = true;
     setShouldAutoScroll(true);
@@ -122,6 +149,7 @@ export const Thread: FC = () => {
         />
         <ThreadWelcome />
 
+        {/* 메시지 목록 컨테이너: DOM/높이 변화 관찰 대상 */}
         <div ref={messagesRootRef} className="w-full flex flex-col items-center">
           <ThreadPrimitive.Messages
             components={{
@@ -136,7 +164,7 @@ export const Thread: FC = () => {
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
 
-        {/* 하단 앵커: 1px 높이로 안정적 관찰 */}
+        {/* 하단 앵커: Intersection 대신 스크롤 기준 사용 → 1px 높이로 충분 */}
         <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden className="h-px" />
 
         <div className="sticky z-10 bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-0">
@@ -308,7 +336,6 @@ const AssistantMessage: FC = () => {
       </div>
 
       <AssistantActionBar />
-
       <BranchPicker className="col-start-2 row-start-2 -ml-2 mr-2" />
     </MessagePrimitive.Root>
   );
