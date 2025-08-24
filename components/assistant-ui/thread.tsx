@@ -34,32 +34,34 @@ function isAtBottom(el: HTMLElement, epsilon = 2) {
   return gap <= epsilon;
 }
 
-/** 컨테이너에서 특정 역할 메시지 개수 가져오기 */
-function countMsgs(container: HTMLElement | null, selector: string) {
-  if (!container) return 0;
-  return container.querySelectorAll<HTMLElement>(selector).length;
-}
+/** Thread running 상태 변화 감지용 (마운트 시 콜백 실행) */
+const RunEffect: FC<{ cb: () => void }> = ({ cb }) => {
+  useEffect(() => { cb(); }, [cb]);
+  return null;
+};
+const RunStateBridge: FC<{ onStart: () => void; onStop: () => void }> = ({ onStart, onStop }) => (
+  <>
+    <ThreadPrimitive.If running>
+      <RunEffect cb={onStart} />
+    </ThreadPrimitive.If>
+    <ThreadPrimitive.If running={false}>
+      <RunEffect cb={onStop} />
+    </ThreadPrimitive.If>
+  </>
+);
 
 export const Thread: FC = () => {
   /** 내부 제어 Ref */
-  const freezeRef = useRef(false);                 // 유저가 위로 스크롤하면 true
-  const programmaticRef = useRef(false);           // 우리가 만든 스크롤은 무시
-  const lastScrollTopRef = useRef(0);              // 스크롤 방향 판정용
-  const runActiveRef = useRef(false);              // "현재 답변 중" 플래그
-  const endRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // 메시지 개수 스냅샷(초기/변화 감지용)
-  const lastUserCountRef = useRef(0);
-  const lastAssistantCountRef = useRef(0);
+  const freezeRef = useRef(false);           // 사용자가 위로 스크롤하면 true
+  const programmaticRef = useRef(false);     // 우리가 만든 스크롤은 무시
+  const lastScrollTopRef = useRef(0);        // 스크롤 방향 판정
+  const runActiveRef = useRef(false);        // "답변 중" 상태
 
   /** DOM refs */
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
-
-  const setViewportRef: RefCallback<HTMLDivElement> = (el) => {
-    viewportRef.current = el;
-  };
+  const setViewportRef: RefCallback<HTMLDivElement> = (el) => { viewportRef.current = el; };
 
   /** 안전 스크롤 (우리가 만든 스크롤임을 표시) */
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -69,47 +71,35 @@ export const Thread: FC = () => {
     try {
       anchor.scrollIntoView({ behavior, block: "end" });
     } finally {
-      requestAnimationFrame(() => {
-        programmaticRef.current = false;
-      });
+      requestAnimationFrame(() => { programmaticRef.current = false; });
     }
   }, []);
 
-  /** 첫 진입: 하단 정렬 + 초기 카운트/스크롤 위치 기록 */
+  /** 첫 진입: 하단 정렬 */
   useEffect(() => {
     scrollToBottom("auto");
-    const root =
-      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
-    if (root) {
-      lastScrollTopRef.current = root.scrollTop;
-    }
-    lastUserCountRef.current = countMsgs(messagesRootRef.current, ".aui-msg--user");
-    lastAssistantCountRef.current = countMsgs(messagesRootRef.current, ".aui-msg--assistant");
+    const root = viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    if (root) lastScrollTopRef.current = root.scrollTop;
   }, [scrollToBottom]);
 
-  /** 스크롤 이벤트: 위로 스크롤 시 즉시 freeze, 바닥 복귀 시 해제 */
+  /** 스크롤 이벤트: 위로 스크롤하면 freeze, 바닥 복귀 시 해제 */
   useEffect(() => {
-    const root =
-      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
+    const root = viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (!root) return;
 
     const onScroll = () => {
-      if (programmaticRef.current) {
+      if (programmaticRef.current) { // 우리가 만든 스크롤은 무시
         lastScrollTopRef.current = root.scrollTop;
         return;
       }
-
       const dy = root.scrollTop - lastScrollTopRef.current; // >0 내려감 / <0 올라감
       lastScrollTopRef.current = root.scrollTop;
 
-      if (dy < -2) {
-        // 유저가 "위로" 스크롤 → 즉시 동작 중단
+      if (dy < -2) {           // 사용자가 위로 스크롤 → 즉시 잠금
         freezeRef.current = true;
         return;
       }
-
-      // 바닥 복귀 시 해제 (직접 내린 경우)
-      if (isAtBottom(root)) {
+      if (isAtBottom(root)) {  // 사용자가 직접 바닥까지 내리면 잠금 해제
         freezeRef.current = false;
       }
     };
@@ -118,63 +108,42 @@ export const Thread: FC = () => {
     return () => root.removeEventListener("scroll", onScroll);
   }, []);
 
-  /** "답변 중(run)" inactivity 타이머 재설정 */
-  const kickEndRunTimer = useCallback(() => {
-    if (endRunTimerRef.current) clearTimeout(endRunTimerRef.current);
-    // 스트리밍이 멈췄다고 간주하는 쉬는 시간(조정 가능)
-    endRunTimerRef.current = setTimeout(() => {
-      runActiveRef.current = false;
-    }, 800);
-  }, []);
-
-  /** 메시지 변화 감시:
-   *  - 유저 메시지 증가 → 새 질문 발생 → run 시작 + (freeze 아닐 때) 하단 이동
-   *  - 어시스턴트 메시지 증가/변화 → run 중일 때만 (freeze 아닐 때) 하단 이동
+  /** 메시지 DOM 변화 감지:
+   *  - runActive(답변 중) && !freeze 이면 하단 유지(스트리밍 포함)
+   *  - 그 외에는 자동 스크롤 절대 안 함
    */
   useEffect(() => {
     const container = messagesRootRef.current;
     if (!container) return;
 
     const mo = new MutationObserver((muts) => {
-      // 현재 카운트
-      const userCount = countMsgs(container, ".aui-msg--user");
-      const asstCount = countMsgs(container, ".aui-msg--assistant");
+      if (!runActiveRef.current || freezeRef.current) return;
 
-      // 1) 유저 메시지 증가 → "새 질문"
-      if (userCount > lastUserCountRef.current) {
-        lastUserCountRef.current = userCount;
-        runActiveRef.current = true;      // 새 회차 시작
-        kickEndRunTimer();                // 곧바로 종료되지 않도록 스타트
-        if (!freezeRef.current) {
-          scrollToBottom("smooth");       // 유저 메시지 직후 하단 붙이기
-        }
-      }
-
-      // 2) 어시스턴트 메시지 증가
-      if (asstCount > lastAssistantCountRef.current) {
-        lastAssistantCountRef.current = asstCount;
-        if (runActiveRef.current && !freezeRef.current) {
-          scrollToBottom("smooth");
-        }
-        kickEndRunTimer();
-      }
-
-      // 3) 스트리밍/부분 렌더 등 기타 DOM 변화
-      //    run 중이라면(답변이 진행 중) 하단 유지
-      const hasAnyChange = muts.some(
-        (m) => m.type === "childList" || m.type === "characterData" || m.type === "attributes"
+      // 의미 있는 변화가 있을 때만 스크롤 (childList/characterData)
+      const changed = muts.some(
+        (m) => m.type === "childList" || m.type === "characterData"
       );
-      if (hasAnyChange && runActiveRef.current) {
-        kickEndRunTimer();
-        if (!freezeRef.current) {
-          scrollToBottom("auto");
-        }
-      }
+      if (!changed) return;
+
+      // 스트리밍 중에는 튀지 않게 auto, 새 블록 추가 시는 smooth(아래 onStart에서 한 번 더 보장)
+      scrollToBottom("auto");
     });
 
     mo.observe(container, { childList: true, subtree: true, characterData: true, attributes: false });
     return () => mo.disconnect();
-  }, [kickEndRunTimer, scrollToBottom]);
+  }, [scrollToBottom]);
+
+  /** 답변 시작/종료 신호를 Assistant-UI의 running 상태에서 직접 받음 */
+  const onRunStart = useCallback(() => {
+    runActiveRef.current = true;
+    // 새 답변 시작 시 한 번 아래로(사용자가 위로 올려둔 상태면 freeze 때문에 스킵됨)
+    if (!freezeRef.current) scrollToBottom("smooth");
+  }, [scrollToBottom]);
+
+  const onRunStop = useCallback(() => {
+    runActiveRef.current = false;
+    // 끝날 때는 아무 것도 하지 않음 (유저가 위로 보던 맥락 유지)
+  }, []);
 
   /** "맨 아래" 버튼: freeze 해제 + 이동 */
   const onJumpBottom = useCallback(() => {
@@ -187,15 +156,19 @@ export const Thread: FC = () => {
       className="bg-background box-border flex h-full flex-col overflow-hidden"
       style={{ ["--thread-max-width" as string]: "42rem" }}
     >
+      {/* running 브리지: 답변 시작/종료를 ref 플래그로 반영 */}
+      <RunStateBridge onStart={onRunStart} onStop={onRunStop} />
+
       <ThreadPrimitive.Viewport
         ref={setViewportRef}
         id="thread-viewport"
         className="flex h-full flex-col items-center overflow-y-scroll scroll-smooth bg-inherit px-4 pt-8"
       >
         <div aria-hidden className="fixed inset-0 -z-0 bg-cover bg-center bg-no-repeat" />
+
         <ThreadWelcome />
 
-        {/* 메시지 목록 컨테이너 */}
+        {/* 메시지 목록 컨테이너(관찰 대상) */}
         <div ref={messagesRootRef} className="w-full flex flex-col items-center">
           <ThreadPrimitive.Messages
             components={{
@@ -370,11 +343,7 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root className="aui-msg aui-msg--assistant grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-4">
       <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
         <MessagePrimitive.Content
-          components={{
-            Text: MarkdownText,
-            tools: { Fallback: ToolFallback },
-            Source: SourcePill,
-          }}
+          components={{ Text: MarkdownText, tools: { Fallback: ToolFallback }, Source: SourcePill }}
         />
       </div>
       <AssistantActionBar />
@@ -410,10 +379,7 @@ const AssistantActionBar: FC = () => {
   );
 };
 
-const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({
-  className,
-  ...rest
-}) => {
+const BranchPicker: FC<BranchPickerPrimitive.Root.Props> = ({ className, ...rest }) => {
   return (
     <BranchPickerPrimitive.Root
       hideWhenSingleBranch
