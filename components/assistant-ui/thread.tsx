@@ -28,88 +28,76 @@ import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** 바닥 판정: '완전 하단'에서만 true (조금만 올려도 false) */
+/** '완전 하단'에 근접했는지 여부(조금만 위여도 false) */
 function isAtBottom(el: HTMLElement, epsilon = 2) {
   const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
   return gap <= epsilon;
 }
 
 export const Thread: FC = () => {
-  // 오토스크롤 on/off (UI 표시용)
+  /** UI 노출용 오토스크롤 상태 */
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
-  // 최신 상태/락/의도 유지용 ref들
-  const autoScrollRef = useRef(true);             // shouldAutoScroll의 최신값
-  const freezeRef = useRef(false);                // 사용자가 위로 올린 뒤 해제 전까지 true
-  const userIntentRef = useRef(false);            // 직전 스크롤이 사용자 의도였는지
-  const intentTimerRef = useRef<number | null>(null);
-  const lastScrollTopRef = useRef(0);
+  /** 내부 상태 Ref */
+  const autoScrollRef = useRef(true);      // shouldAutoScroll 최신값 미러
+  const freezeRef = useRef(false);         // 사용자가 위로 올린 뒤 바닥 복귀/버튼 전까지 true
+  const programmaticScrollRef = useRef(false); // 우리가 호출한 scrollIntoView로 인한 스크롤이면 true
 
-  // 앵커/컨테이너 refs
+  /** DOM Ref */
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const lastScrollTopRef = useRef(0);
 
+  /** viewport ref setter */
   const setViewportRef: RefCallback<HTMLDivElement> = (el) => {
     viewportRef.current = el;
   };
 
-  // 상태 ↔ ref 동기화
+  /** 상태 ↔ ref 동기화 */
   useEffect(() => {
     autoScrollRef.current = shouldAutoScroll;
   }, [shouldAutoScroll]);
 
-  // 사용자 의도 플래그 ON (800ms 후 자동 해제)
-  const armUserIntent = useCallback(() => {
-    userIntentRef.current = true;
-    if (intentTimerRef.current) window.clearTimeout(intentTimerRef.current);
-    intentTimerRef.current = window.setTimeout(() => {
-      userIntentRef.current = false;
-      intentTimerRef.current = null;
-    }, 800);
+  /** 안전한 하단 이동(우리가 만든 스크롤임을 표시) */
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const anchor = bottomRef.current;
+    if (!anchor) return;
+    programmaticScrollRef.current = true;
+    try {
+      anchor.scrollIntoView({ behavior, block: "end" });
+    } finally {
+      // 다음 프레임에 플래그 해제(스크롤 이벤트 한 번 정도는 무시)
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
+    }
   }, []);
 
-  // 스크롤 컨테이너에서 사용자 입력 이벤트로 의도 플래그 set
+  /** 첫 진입 시 하단 정렬 */
   useEffect(() => {
-    const root =
-      viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
-    if (!root) return;
+    scrollToBottom("auto");
+  }, [scrollToBottom]);
 
-    const onPointer = () => armUserIntent();
-    root.addEventListener("wheel", onPointer, { passive: true });
-    root.addEventListener("touchstart", onPointer, { passive: true });
-    root.addEventListener("pointerdown", onPointer, { passive: true });
-
-    return () => {
-      root.removeEventListener("wheel", onPointer);
-      root.removeEventListener("touchstart", onPointer);
-      root.removeEventListener("pointerdown", onPointer);
-    };
-  }, [armUserIntent]);
-
-  // ✅ 스크롤 이벤트: 사용자 의도일 때만 바닥/락 상태를 갱신
+  /** 스크롤 이벤트: 바닥 이탈 시 즉시 freeze, 바닥 복귀 시 해제 */
   useEffect(() => {
     const root =
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (!root) return;
 
     const onScroll = () => {
-      if (!userIntentRef.current) {
-        // 프로그램틱 스크롤(예: 포커스 이동, 프레임워크 내부 스크롤)은 무시
-        return;
-      }
+      // 우리가 의도적으로 스크롤한 경우는 판정 대상에서 제외
+      if (programmaticScrollRef.current) return;
 
       const now = root.scrollTop;
       const prev = lastScrollTopRef.current;
       lastScrollTopRef.current = now;
 
-      const goingUp = now < prev;
+      const atBottom = isAtBottom(root);
 
-      if (goingUp) {
-        // 위로 올리면 즉시 락 + 오토스크롤 OFF
-        if (!freezeRef.current) {
-          freezeRef.current = true;
-        }
+      if (!atBottom) {
+        // 바닥에서 벗어남 → 무조건 잠금 + 오토스크롤 OFF
+        if (!freezeRef.current) freezeRef.current = true;
         if (autoScrollRef.current) {
           autoScrollRef.current = false;
           setShouldAutoScroll(false);
@@ -117,89 +105,79 @@ export const Thread: FC = () => {
         return;
       }
 
-      // 아래로 내려가는 중: '완전 하단' 도달했을 때만 락 해제 + 오토스크롤 ON
-      if (isAtBottom(root)) {
-        if (freezeRef.current) freezeRef.current = false;
-        if (!autoScrollRef.current) {
-          autoScrollRef.current = true;
-          setShouldAutoScroll(true);
-        }
+      // 바닥 복귀(사용자가 아래로 내린 결과든, 자연히 도달했든)
+      if (freezeRef.current) {
+        freezeRef.current = false;
+      }
+      if (!autoScrollRef.current) {
+        autoScrollRef.current = true;
+        setShouldAutoScroll(true);
       }
     };
 
     root.addEventListener("scroll", onScroll, { passive: true });
-
-    // 초기 상태: 새 세션에선 바닥으로 맞춤
+    // 초기 스냅샷
     lastScrollTopRef.current = root.scrollTop;
-    try {
-      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-    } catch {}
 
     return () => root.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ✅ 새 메시지 추가/삭제 시: 락이 해제되어 있고 + 오토스크롤 ON일 때만 하단 이동
+  /** 새 메시지 추가/삭제(자식 변경) → 잠금이 아닐 때만 하단 이동 */
   useEffect(() => {
     const list = messagesRootRef.current;
-    const bottom = bottomRef.current;
     const root =
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
-    if (!list || !bottom || !root) return;
+    if (!list || !root) return;
 
     const mo = new MutationObserver((muts) => {
-      if (freezeRef.current || !autoScrollRef.current) return; // 잠겨있으면 무시
-      if (!isAtBottom(root)) return;                           // 현재 바닥이 아니면 무시
+      if (freezeRef.current || !autoScrollRef.current) return;
+      if (!isAtBottom(root)) return;
 
-      let scheduled = false;
+      // 실제 DOM 변경이 있을 때만 수행
+      let changed = false;
       for (const m of muts) {
         if (m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)) {
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(() => {
-              try {
-                bottom.scrollIntoView({ behavior: "smooth", block: "end" });
-              } catch {}
-              scheduled = false;
-            });
-          }
+          changed = true;
           break;
         }
       }
+      if (!changed) return;
+
+      scrollToBottom("smooth");
     });
 
     mo.observe(list, { childList: true, subtree: true });
     return () => mo.disconnect();
-  }, []);
+  }, [scrollToBottom]);
 
-  // ✅ 메시지 높이 변화(스트리밍 등) 시: 락 해제 + 바닥일 때만 미세 조정
+  /** 메시지 높이 변화(스트리밍 등) → 잠금 아닐 때만 미세 보정 */
   useEffect(() => {
     const list = messagesRootRef.current;
-    const bottom = bottomRef.current;
     const root =
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
-    if (!list || !bottom || !root) return;
+    if (!list || !root) return;
 
     if (typeof ResizeObserver === "undefined") return;
 
     const ro = new ResizeObserver(() => {
       if (freezeRef.current || !autoScrollRef.current) return;
       if (!isAtBottom(root)) return;
-      try {
-        bottom.scrollIntoView({ behavior: "auto", block: "end" });
-      } catch {}
+      scrollToBottom("auto");
     });
 
     ro.observe(list);
     return () => ro.disconnect();
-  }, []);
+  }, [scrollToBottom]);
 
-  // ✅ 사용자가 명시적으로 "맨 아래" 버튼 클릭 → 락 해제 + 오토스크롤 ON + 하단 이동
+  /** 사용자가 명시적으로 "맨 아래" 버튼 클릭 → 잠금 해제 + 하단 이동 */
   const onJumpBottom = useCallback(() => {
     freezeRef.current = false;
-    autoScrollRef.current = true;
-    setShouldAutoScroll(true);
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, []);
+    if (!autoScrollRef.current) {
+      autoScrollRef.current = true;
+      setShouldAutoScroll(true);
+    }
+    scrollToBottom("smooth");
+  }, [scrollToBottom]);
 
   return (
     <ThreadPrimitive.Root
@@ -229,7 +207,7 @@ export const Thread: FC = () => {
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
 
-        {/* 하단 앵커 (유일한 바닥 기준) */}
+        {/* 유일한 바닥 기준 앵커 */}
         <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden className="h-px" />
 
         <div className="sticky z-10 bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-0">
