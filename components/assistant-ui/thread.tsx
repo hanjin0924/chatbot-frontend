@@ -26,26 +26,25 @@ import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button
 import { ToolFallback } from "./tool-fallback";
 import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export const Thread: FC = () => {
-
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const autoScrollRef = useRef(true)
+  const autoScrollRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
   const setViewportRef: RefCallback<HTMLDivElement> = (el) => {
-     viewportRef.current = el;
-   };
+    viewportRef.current = el;
+  };
 
-    // 최신 상태를 Observer에서 안정적으로 읽기 위해 ref에 복제
+  // 최신 상태를 Observer에서 안정적으로 읽기 위해 ref에 복제
   useEffect(() => {
     autoScrollRef.current = shouldAutoScroll;
   }, [shouldAutoScroll]);
 
-  // Viewport 스크롤 상태 감지(하단 근접 여부)
+  // 하단 앵커 보임 여부로 자동 스크롤 on/off
   useEffect(() => {
     const root = viewportRef.current ?? document.getElementById("thread-viewport");
     const bottom = bottomRef.current;
@@ -54,13 +53,13 @@ export const Thread: FC = () => {
     const io = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
-        // root 하단에서 120px 위까지 들어오면 isIntersecting 판정(= auto-scroll ON)
         setShouldAutoScroll(entry.isIntersecting);
       },
       {
-        root,                 // 스크롤 컨테이너
-        threshold: 0.01,      // 살짝만 보여도 true
-        rootMargin: "0px 0px 120px 0px", // 하단 120px을 '보이지 않는 영역'으로 간주
+        root,
+        threshold: 0.01,
+        // 하단 120px 여유: 근접하면 isIntersecting = true
+        rootMargin: "0px 0px 120px 0px",
       }
     );
 
@@ -72,15 +71,15 @@ export const Thread: FC = () => {
     return () => io.disconnect();
   }, []);
 
+  // ✅ 새 메시지 추가되면 (자동 스크롤 on일 때만) 하단으로
   useEffect(() => {
     const list = messagesRootRef.current;
     const bottom = bottomRef.current;
     if (!list || !bottom) return;
 
-    // 메시지 DOM 변경 감지 → 하단으로 스크롤
     const obs = new MutationObserver((muts) => {
       if (!autoScrollRef.current) return;
-      
+
       let scheduled = false;
       for (const m of muts) {
         if (m.type === "childList" && (m.addedNodes.length || m.removedNodes.length)) {
@@ -100,12 +99,17 @@ export const Thread: FC = () => {
     return () => obs.disconnect();
   }, []);
 
+  // 수동 "맨 아래" 버튼 클릭 시: 바로 이동 + 자동 스크롤 켜기
+  const onJumpBottom = useCallback(() => {
+    autoScrollRef.current = true;
+    setShouldAutoScroll(true);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, []);
+
   return (
     <ThreadPrimitive.Root
       className="bg-background box-border flex h-full flex-col overflow-hidden"
-      style={{
-        ["--thread-max-width" as string]: "42rem",
-      }}
+      style={{ ["--thread-max-width" as string]: "42rem" }}
     >
       <ThreadPrimitive.Viewport
         ref={setViewportRef}
@@ -117,12 +121,13 @@ export const Thread: FC = () => {
           className="fixed inset-0 -z-0 bg-cover bg-center bg-no-repeat"
         />
         <ThreadWelcome />
+
         <div ref={messagesRootRef} className="w-full flex flex-col items-center">
           <ThreadPrimitive.Messages
             components={{
-            UserMessage: UserMessage,
-            EditComposer: EditComposer,
-            AssistantMessage: AssistantMessage,
+              UserMessage: UserMessage,
+              EditComposer: EditComposer,
+              AssistantMessage: AssistantMessage,
             }}
           />
         </div>
@@ -130,11 +135,12 @@ export const Thread: FC = () => {
         <ThreadPrimitive.If empty={false}>
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
-        
-        <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden className="h-px"/>
+
+        {/* 하단 앵커: 1px 높이로 안정적 관찰 */}
+        <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden className="h-px" />
 
         <div className="sticky z-10 bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-0">
-          <ThreadScrollToBottom />
+          <ThreadScrollToBottom onJumpBottom={onJumpBottom} />
           <Composer />
         </div>
       </ThreadPrimitive.Viewport>
@@ -142,13 +148,15 @@ export const Thread: FC = () => {
   );
 };
 
-const ThreadScrollToBottom: FC = () => {
+const ThreadScrollToBottom: FC<{ onJumpBottom: () => void }> = ({ onJumpBottom }) => {
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
+        onClick={onJumpBottom}
         tooltip="Scroll to bottom"
         variant="outline"
         className="absolute -top-8 rounded-full disabled:invisible"
+        aria-label="Scroll to bottom"
       >
         <ArrowDownIcon />
       </TooltipIconButton>
@@ -162,8 +170,6 @@ const ThreadWelcome: FC = () => {
       <div className="flex z-10 w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
         <div className="flex w-full flex-grow flex-col items-center justify-center">
           <HelloLottie width={700} className="mb-15" />
-          {/*<p className="mt-4 font-medium text-2xl">CCCR님, 안녕하세요.</p>*/}
-          {/*<AnimatedGreeting text="CCCR님, 안녕하세요." />*/}
         </div>
         <ThreadWelcomeSuggestions />
       </div>
@@ -293,8 +299,9 @@ const AssistantMessage: FC = () => {
     <MessagePrimitive.Root className="grid grid-cols-[auto_auto_1fr] grid-rows-[auto_1fr] relative w-full max-w-[var(--thread-max-width)] py-4">
       <div className="text-foreground max-w-[calc(var(--thread-max-width)*0.8)] break-words leading-7 col-span-2 col-start-2 row-start-1 my-1.5">
         <MessagePrimitive.Content
-          components={{ 
-            Text: MarkdownText, tools: { Fallback: ToolFallback }, 
+          components={{
+            Text: MarkdownText,
+            tools: { Fallback: ToolFallback },
             Source: SourcePill,
           }}
         />
