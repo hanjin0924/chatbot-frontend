@@ -28,7 +28,7 @@ import HelloLottie from "../HelloLottie";
 import { SourcePill } from "@/components/assistant-ui/source-pill";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** '완전 하단'에 근접했는지 여부(조금만 위여도 false) */
+/** '완전 하단' 근접 여부(약간만 위여도 false) */
 function isAtBottom(el: HTMLElement, epsilon = 2) {
   const gap = el.scrollHeight - el.clientHeight - el.scrollTop;
   return gap <= epsilon;
@@ -39,15 +39,14 @@ export const Thread: FC = () => {
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   /** 내부 상태 Ref */
-  const autoScrollRef = useRef(true);      // shouldAutoScroll 최신값 미러
-  const freezeRef = useRef(false);         // 사용자가 위로 올린 뒤 바닥 복귀/버튼 전까지 true
-  const programmaticScrollRef = useRef(false); // 우리가 호출한 scrollIntoView로 인한 스크롤이면 true
+  const autoScrollRef = useRef(true);           // shouldAutoScroll 최신값 미러
+  const freezeRef = useRef(false);              // 사용자가 위로 올리면 true, 바닥 복귀/버튼 전까지 유지
+  const programmaticScrollRef = useRef(false);  // 우리가 만든 스크롤 이벤트는 무시
 
   /** DOM Ref */
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRootRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const lastScrollTopRef = useRef(0);
 
   /** viewport ref setter */
   const setViewportRef: RefCallback<HTMLDivElement> = (el) => {
@@ -67,7 +66,6 @@ export const Thread: FC = () => {
     try {
       anchor.scrollIntoView({ behavior, block: "end" });
     } finally {
-      // 다음 프레임에 플래그 해제(스크롤 이벤트 한 번 정도는 무시)
       requestAnimationFrame(() => {
         programmaticScrollRef.current = false;
       });
@@ -86,17 +84,13 @@ export const Thread: FC = () => {
     if (!root) return;
 
     const onScroll = () => {
-      // 우리가 의도적으로 스크롤한 경우는 판정 대상에서 제외
+      // 프로그래매틱 스크롤은 판정에서 제외
       if (programmaticScrollRef.current) return;
-
-      const now = root.scrollTop;
-      const prev = lastScrollTopRef.current;
-      lastScrollTopRef.current = now;
 
       const atBottom = isAtBottom(root);
 
       if (!atBottom) {
-        // 바닥에서 벗어남 → 무조건 잠금 + 오토스크롤 OFF
+        // 바닥에서 벗어났다면 즉시 잠금 + 오토스크롤 OFF
         if (!freezeRef.current) freezeRef.current = true;
         if (autoScrollRef.current) {
           autoScrollRef.current = false;
@@ -105,7 +99,7 @@ export const Thread: FC = () => {
         return;
       }
 
-      // 바닥 복귀(사용자가 아래로 내린 결과든, 자연히 도달했든)
+      // 바닥 복귀 → 잠금 해제 및 오토스크롤 ON
       if (freezeRef.current) {
         freezeRef.current = false;
       }
@@ -116,13 +110,10 @@ export const Thread: FC = () => {
     };
 
     root.addEventListener("scroll", onScroll, { passive: true });
-    // 초기 스냅샷
-    lastScrollTopRef.current = root.scrollTop;
-
     return () => root.removeEventListener("scroll", onScroll);
   }, []);
 
-  /** 새 메시지 추가/삭제(자식 변경) → 잠금이 아닐 때만 하단 이동 */
+  /** 새 메시지 추가/삭제 → 잠금 아닐 때만 하단 이동 */
   useEffect(() => {
     const list = messagesRootRef.current;
     const root =
@@ -169,7 +160,7 @@ export const Thread: FC = () => {
     return () => ro.disconnect();
   }, [scrollToBottom]);
 
-  /** 사용자가 명시적으로 "맨 아래" 버튼 클릭 → 잠금 해제 + 하단 이동 */
+  /** "맨 아래" 버튼: 잠금 해제 + 하단 이동 */
   const onJumpBottom = useCallback(() => {
     freezeRef.current = false;
     if (!autoScrollRef.current) {
