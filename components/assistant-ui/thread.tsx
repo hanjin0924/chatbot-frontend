@@ -60,7 +60,7 @@ export const Thread: FC = () => {
       {
         root,                 // 스크롤 컨테이너
         threshold: 0.01,      // 살짝만 보여도 true
-        rootMargin: "0px 0px -120px 0px", // 하단 120px을 '보이지 않는 영역'으로 간주
+        rootMargin: "0px 0px 120px 0px", // 하단 120px을 '보이지 않는 영역'으로 간주
       }
     );
 
@@ -131,7 +131,7 @@ export const Thread: FC = () => {
           <div className="min-h-8 flex-grow" />
         </ThreadPrimitive.If>
         
-        <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden />
+        <div ref={bottomRef} id="chat-bottom-anchor" aria-hidden className="h-px"/>
 
         <div className="sticky z-10 bottom-0 mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-0">
           <ThreadScrollToBottom />
