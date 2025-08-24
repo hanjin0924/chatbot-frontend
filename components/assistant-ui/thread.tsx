@@ -41,9 +41,6 @@ function countMsgs(container: HTMLElement | null, selector: string) {
 }
 
 export const Thread: FC = () => {
-  /** UI 상태(버튼 표시 등 필요한 경우 대비) */
-  const [atBottomUI, setAtBottomUI] = useState(true);
-
   /** 내부 제어 Ref */
   const freezeRef = useRef(false);                 // 유저가 위로 스크롤하면 true
   const programmaticRef = useRef(false);           // 우리가 만든 스크롤은 무시
@@ -85,7 +82,6 @@ export const Thread: FC = () => {
       viewportRef.current ?? (document.getElementById("thread-viewport") as HTMLElement | null);
     if (root) {
       lastScrollTopRef.current = root.scrollTop;
-      setAtBottomUI(isAtBottom(root));
     }
     lastUserCountRef.current = countMsgs(messagesRootRef.current, ".aui-msg--user");
     lastAssistantCountRef.current = countMsgs(messagesRootRef.current, ".aui-msg--assistant");
@@ -100,13 +96,11 @@ export const Thread: FC = () => {
     const onScroll = () => {
       if (programmaticRef.current) {
         lastScrollTopRef.current = root.scrollTop;
-        setAtBottomUI(isAtBottom(root));
         return;
       }
 
       const dy = root.scrollTop - lastScrollTopRef.current; // >0 내려감 / <0 올라감
       lastScrollTopRef.current = root.scrollTop;
-      setAtBottomUI(isAtBottom(root));
 
       if (dy < -2) {
         // 유저가 "위로" 스크롤 → 즉시 동작 중단
@@ -357,7 +351,7 @@ const UserActionBar: FC = () => {
 
 const EditComposer: FC = () => {
   return (
-    <ComposerPrimitive.Root className="bg-muted my-4 flex w/full max-w-[var(--thread-max-width)] flex-col gap-2 rounded-xl">
+    <ComposerPrimitive.Root className="bg-muted my-4 flex w-full max-w-[var(--thread-max-width)] flex-col gap-2 rounded-xl">
       <ComposerPrimitive.Input className="text-foreground flex h-8 w-full resize-none bg-transparent p-4 pb-0 outline-none" />
       <div className="mx-3 mb-3 flex items-center justify-center gap-2 self-end">
         <ComposerPrimitive.Cancel asChild>
