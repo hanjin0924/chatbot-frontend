@@ -51,7 +51,39 @@ jobs:
           
           # 두 개의 태그 모두 푸시
           docker push ${{ env.IMAGE_TAG_UNIQUE }}
-
           docker push ${{ env.IMAGE_TAG_LATEST }}
 
+      - name: Checkout Manifest Repository
+        uses: actions/checkout@v4
+        with:
+          repository: cccr1368/AKS_with_APP
+          token: ${{ secrets.PAT_TOKEN }}
+          path: manifests
+          ref: main
+
+      - name: Install yq (if not present)
+        run: |
+          if ! command -v yq >/dev/null 2>&1; then
+            sudo wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+      - name: Update Kubernetes manifest image
+        run: |
+          cd manifests
+          yq e -i '.spec.template.spec.containers[0].image = "${{ env.IMAGE_TAG_UNIQUE }}"' resource/web.yaml
+
+      - name: Commit and push changes
+        run: |
+          cd manifests
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add .
+            git commit -m "Update front image to ${IMAGE_TAG_UNIQUE}"
+            git push origin main
+          else
+            echo "No changes to commit."
+          fi
 
