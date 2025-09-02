@@ -9,7 +9,8 @@ on:
 jobs:
   build-and-push:
     name: Build and push to ACR
-    runs-on: [self-hosted,frontend]
+      #runs-on: [self-hosted,frontend]
+    runs-on: [self-hosted]
     permissions:
       contents: read # actions/checkout
     
