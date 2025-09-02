@@ -14,8 +14,8 @@ jobs:
       contents: read # actions/checkout
     
     env:
-      ACR_NAME: "crcicddevkrc01"
-      ACR_IMAGE_NAME: "chatbot-frontend"
+      ACR_NAME: "hjacr123"
+      ACR_IMAGE_NAME: "hjimage"
 
     steps:
       - name: 'Checkout repository'
@@ -56,7 +56,7 @@ jobs:
       - name: Checkout Manifest Repository
         uses: actions/checkout@v4
         with:
-          repository: cccr1368/AKS_with_APP
+          repository: hanjin0924/chatbot-frontend
           token: ${{ secrets.PAT_TOKEN }}
           path: manifests
           ref: main
