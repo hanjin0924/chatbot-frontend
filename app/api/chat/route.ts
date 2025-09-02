@@ -9,7 +9,7 @@ const API_BASE = (process.env.API_BASE_URL || "http://api:4000").replace(/\/+$/,
 export async function POST(req: NextRequest) {
   // 스트리밍 안정성을 위해 문자열로 전달
   const bodyText = await req.text();
-  const upstream = `${API_BASE}/api/chat?debugUsage=1`;
+  const upstream = `${API_BASE}/api/chat`;
 
   const r = await fetch(upstream, {
     method: "POST",
